@@ -55,7 +55,7 @@ module tb_axi4_to_apb4_2x_simple;
   wire [DATA_WIDTH-1:0]     PWDATA0;
   wire [(DATA_WIDTH/8)-1:0] PSTRB0;
   reg  [DATA_WIDTH-1:0]     PRDATA0;
-  wire                      PREADY0;
+  reg                       PREADY0;
   wire                      PSLVERR0;
 
   wire [ADDR_WIDTH-1:0]     PADDR1;
@@ -66,33 +66,61 @@ module tb_axi4_to_apb4_2x_simple;
   wire [DATA_WIDTH-1:0]     PWDATA1;
   wire [(DATA_WIDTH/8)-1:0] PSTRB1;
   reg  [DATA_WIDTH-1:0]     PRDATA1;
-  wire                      PREADY1;
+  reg                       PREADY1;
   wire                      PSLVERR1;
 
-  assign PREADY0  = 1'b1;
   assign PSLVERR0 = 1'b0;
-  assign PREADY1  = 1'b1;
   assign PSLVERR1 = 1'b0;
 
   // Simple APB memories
   reg [DATA_WIDTH-1:0] mem0 [0:255];
   reg [DATA_WIDTH-1:0] mem1 [0:255];
 
-  always @(posedge ACLK) begin
-    if (PSEL0 && PENABLE0) begin
-      if (PWRITE0) begin
-        mem0[PADDR0[9:2]] <= PWDATA0;
-      end else begin
-        PRDATA0 <= mem0[PADDR0[9:2]];
+  reg       rd_wait0;
+  reg       rd_wait1;
+
+  always @(posedge ACLK or negedge ARESETn) begin
+    if (!ARESETn) begin
+      PREADY0    <= 1'b1;
+      PREADY1    <= 1'b1;
+      rd_wait0   <= 1'b0;
+      rd_wait1   <= 1'b0;
+    end else begin
+      // Default each cycle: ready unless a read wait-state is being inserted.
+      PREADY0 <= 1'b1;
+      PREADY1 <= 1'b1;
+
+      // APB0 model
+      if (rd_wait0) begin
+        rd_wait0 <= 1'b0;
+      end else if (PSEL0 && PENABLE0) begin
+        if (PWRITE0) begin
+          mem0[PADDR0[9:2]] <= PWDATA0;
+        end else begin
+          // Insert one APB wait-state for reads.
+          PREADY0  <= 1'b0;
+          rd_wait0 <= 1'b1;
+        end
+      end
+
+      // APB1 model
+      if (rd_wait1) begin
+        rd_wait1 <= 1'b0;
+      end else if (PSEL1 && PENABLE1) begin
+        if (PWRITE1) begin
+          mem1[PADDR1[9:2]] <= PWDATA1;
+        end else begin
+          PREADY1  <= 1'b0;
+          rd_wait1 <= 1'b1;
+        end
       end
     end
-    if (PSEL1 && PENABLE1) begin
-      if (PWRITE1) begin
-        mem1[PADDR1[9:2]] <= PWDATA1;
-      end else begin
-        PRDATA1 <= mem1[PADDR1[9:2]];
-      end
-    end
+  end
+
+  // Read data comes directly from memory; APB wait-state controls when it is sampled.
+  always @(*) begin
+    PRDATA0 = mem0[PADDR0[9:2]];
+    PRDATA1 = mem1[PADDR1[9:2]];
   end
 
   axi4_to_apb4_2x_simple #(

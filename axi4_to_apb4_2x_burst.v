@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module axi4_to_apb4_2x_burst #(
     parameter ID_WIDTH   = 4,
     parameter ADDR_WIDTH = 32,

@@ -95,6 +95,8 @@ module axi4_to_apb4_2x_simple #(
     reg [2:0]                prot_reg;
     reg                      is_write;
     reg                      sel_apb1;
+    reg                      aw_pending;
+    reg                      w_pending;
 
     reg [DATA_WIDTH-1:0]     wdata_reg;
     reg [(DATA_WIDTH/8)-1:0] wstrb_reg;
@@ -107,13 +109,14 @@ module axi4_to_apb4_2x_simple #(
         S_AXI_ARREADY = 1'b0;
 
         if (state == ST_IDLE) begin
-            // Accept either a write (AW+W in same cycle) or a read, not both
-            if (S_AXI_AWVALID && S_AXI_WVALID && !S_AXI_ARVALID) begin
+            // Allow AW and W to arrive independently.
+            // Reads are only accepted when no partial write is pending.
+            if (!aw_pending && !S_AXI_ARVALID)
                 S_AXI_AWREADY = 1'b1;
+            if (!w_pending && !S_AXI_ARVALID)
                 S_AXI_WREADY  = 1'b1;
-            end else if (S_AXI_ARVALID && !S_AXI_AWVALID && !S_AXI_WVALID) begin
+            if (!aw_pending && !w_pending && !S_AXI_AWVALID && !S_AXI_WVALID)
                 S_AXI_ARREADY = 1'b1;
-            end
         end
     end
 
@@ -126,6 +129,8 @@ module axi4_to_apb4_2x_simple #(
             prot_reg   <= 3'b000;
             is_write   <= 1'b0;
             sel_apb1   <= 1'b0;
+            aw_pending <= 1'b0;
+            w_pending  <= 1'b0;
             wdata_reg  <= {DATA_WIDTH{1'b0}};
             wstrb_reg  <= {(DATA_WIDTH/8){1'b0}};
 
@@ -171,36 +176,44 @@ module axi4_to_apb4_2x_simple #(
 
             case (state)
                 ST_IDLE: begin
-                    // Write acceptance: AW and W together
-                    if (S_AXI_AWVALID && S_AXI_WVALID && S_AXI_AWREADY && S_AXI_WREADY) begin
-                        id_reg    <= S_AXI_AWID;
-                        addr_reg  <= S_AXI_AWADDR;
-                        prot_reg  <= S_AXI_AWPROT;
-                        is_write  <= 1'b1;
-                        sel_apb1  <= S_AXI_AWADDR[31];
-                        wdata_reg <= S_AXI_WDATA;
-                        wstrb_reg <= S_AXI_WSTRB;
+                    if (S_AXI_AWVALID && S_AXI_AWREADY) begin
+                        id_reg      <= S_AXI_AWID;
+                        addr_reg    <= S_AXI_AWADDR;
+                        prot_reg    <= S_AXI_AWPROT;
+                        sel_apb1    <= S_AXI_AWADDR[31];
+                        aw_pending  <= 1'b1;
+                    end
 
-                        // Drive APB write SETUP phase
-                        if (S_AXI_AWADDR[31]) begin
-                            PADDR1  <= S_AXI_AWADDR;
-                            PPROT1  <= S_AXI_AWPROT;
-                            PWDATA1 <= S_AXI_WDATA;
-                            PSTRB1  <= S_AXI_WSTRB;
+                    if (S_AXI_WVALID && S_AXI_WREADY) begin
+                        wdata_reg   <= S_AXI_WDATA;
+                        wstrb_reg   <= S_AXI_WSTRB;
+                        w_pending   <= 1'b1;
+                    end
+
+                    // Start APB write once both channels are captured.
+                    if (aw_pending && w_pending) begin
+                        is_write   <= 1'b1;
+                        aw_pending <= 1'b0;
+                        w_pending  <= 1'b0;
+
+                        if (sel_apb1) begin
+                            PADDR1  <= addr_reg;
+                            PPROT1  <= prot_reg;
+                            PWDATA1 <= wdata_reg;
+                            PSTRB1  <= wstrb_reg;
                             PWRITE1 <= 1'b1;
                             PSEL1   <= 1'b1;
                         end else begin
-                            PADDR0  <= S_AXI_AWADDR;
-                            PPROT0  <= S_AXI_AWPROT;
-                            PWDATA0 <= S_AXI_WDATA;
-                            PSTRB0  <= S_AXI_WSTRB;
+                            PADDR0  <= addr_reg;
+                            PPROT0  <= prot_reg;
+                            PWDATA0 <= wdata_reg;
+                            PSTRB0  <= wstrb_reg;
                             PWRITE0 <= 1'b1;
                             PSEL0   <= 1'b1;
                         end
                         state <= ST_WRITE_APB;
-                    end
-                    // Read acceptance
-                    else if (S_AXI_ARVALID && S_AXI_ARREADY) begin
+                    end else if (S_AXI_ARVALID && S_AXI_ARREADY) begin
+                        // Read acceptance
                         id_reg   <= S_AXI_ARID;
                         addr_reg <= S_AXI_ARADDR;
                         prot_reg <= S_AXI_ARPROT;
@@ -226,10 +239,11 @@ module axi4_to_apb4_2x_simple #(
                 // APB write: SETUP (PSEL) then ACCESS (PENABLE)
                 ST_WRITE_APB: begin
                     if (sel_apb1) begin
-                        PENABLE1 <= 1'b1;
-                        if (PREADY1) begin
-                            PSEL1    <= 1'b0;
-                            PENABLE1 <= 1'b0;
+                        if (!PENABLE1) begin
+                            PENABLE1 <= 1'b1;
+                        end else if (PREADY1) begin
+                            PSEL1     <= 1'b0;
+                            PENABLE1  <= 1'b0;
                             // Prepare write response
                             S_AXI_BID   <= id_reg;
                             S_AXI_BRESP <= PSLVERR1 ? 2'b10 : 2'b00;
@@ -237,10 +251,11 @@ module axi4_to_apb4_2x_simple #(
                             state       <= ST_WRITE_RESP;
                         end
                     end else begin
-                        PENABLE0 <= 1'b1;
-                        if (PREADY0) begin
-                            PSEL0    <= 1'b0;
-                            PENABLE0 <= 1'b0;
+                        if (!PENABLE0) begin
+                            PENABLE0 <= 1'b1;
+                        end else if (PREADY0) begin
+                            PSEL0     <= 1'b0;
+                            PENABLE0  <= 1'b0;
                             S_AXI_BID   <= id_reg;
                             S_AXI_BRESP <= PSLVERR0 ? 2'b10 : 2'b00;
                             S_AXI_BVALID<= 1'b1;
@@ -258,10 +273,11 @@ module axi4_to_apb4_2x_simple #(
                 // APB read: SETUP then ACCESS, then drive RDATA
                 ST_READ_APB: begin
                     if (sel_apb1) begin
-                        PENABLE1 <= 1'b1;
-                        if (PREADY1) begin
-                            PSEL1    <= 1'b0;
-                            PENABLE1 <= 1'b0;
+                        if (!PENABLE1) begin
+                            PENABLE1 <= 1'b1;
+                        end else if (PREADY1) begin
+                            PSEL1     <= 1'b0;
+                            PENABLE1  <= 1'b0;
                             S_AXI_RID   <= id_reg;
                             S_AXI_RDATA <= PRDATA1;
                             S_AXI_RRESP <= PSLVERR1 ? 2'b10 : 2'b00;
@@ -270,10 +286,11 @@ module axi4_to_apb4_2x_simple #(
                             state       <= ST_READ_RESP;
                         end
                     end else begin
-                        PENABLE0 <= 1'b1;
-                        if (PREADY0) begin
-                            PSEL0    <= 1'b0;
-                            PENABLE0 <= 1'b0;
+                        if (!PENABLE0) begin
+                            PENABLE0 <= 1'b1;
+                        end else if (PREADY0) begin
+                            PSEL0     <= 1'b0;
+                            PENABLE0  <= 1'b0;
                             S_AXI_RID   <= id_reg;
                             S_AXI_RDATA <= PRDATA0;
                             S_AXI_RRESP <= PSLVERR0 ? 2'b10 : 2'b00;
