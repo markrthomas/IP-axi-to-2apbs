@@ -2,6 +2,12 @@
 
 IP AXI to 2× APB4 bridge RTL and self-checking testbenches.
 
+## Directory layout
+
+- `src/` - canonical RTL entrypoints for the bridges
+- `test/` - canonical testbench entrypoints
+- `doc/` - documentation
+
 ## Prerequisites
 
 - [Icarus Verilog](https://github.com/steveicarus/iverilog): `iverilog` and `vvp` on your `PATH`.
