@@ -8,6 +8,12 @@ IP AXI to 2× APB4 bridge RTL and self-checking testbenches.
 - `test/` - canonical testbench entrypoints
 - `doc/` - documentation
 
+## Design contract
+
+The target behavior for a fully functional bridge is defined in
+[`doc/design_contract.md`](doc/design_contract.md). Use that document as the
+reference for RTL completion, verification scope, and integration assumptions.
+
 ## Prerequisites
 
 - [Icarus Verilog](https://github.com/steveicarus/iverilog): `iverilog` and `vvp` on your `PATH`.
