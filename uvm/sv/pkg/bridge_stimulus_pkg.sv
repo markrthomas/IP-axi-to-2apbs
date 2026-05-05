@@ -1,7 +1,10 @@
 `ifndef BRIDGE_STIMULUS_PKG_SV
 `define BRIDGE_STIMULUS_PKG_SV
 
+/* verilator lint_off DECLFILENAME */
 package bridge_stimulus_pkg;
+  timeunit 1ns;
+  timeprecision 1ps;
 
   typedef virtual axi4_master_if #(.ID_WIDTH(4), .ADDR_WIDTH(32), .DATA_WIDTH(64)) v_axi_if_64_t;
 
@@ -179,7 +182,7 @@ package bridge_stimulus_pkg;
       vif.S_AXI_AWVALID <= 1'h0;
       wseed = 32'h3f9012ab;
       repeat (2) begin
-        vif.S_AXI_WDATA <= $random(wseed);
+        vif.S_AXI_WDATA <= 64'($random(wseed));
         vif.S_AXI_WLAST <= ((vif.S_AXI_WDATA == 'd1) ? 1'h1 : 1'h0);
         vif.S_AXI_WVALID <= 1'h1;
         wait (vif.S_AXI_WREADY);
@@ -215,14 +218,14 @@ package bridge_stimulus_pkg;
       @(posedge vif.clk);
       vif.S_AXI_AWVALID <= 1'h0;
       for (i = 0; i <= len; i++) begin
-        vif.S_AXI_WDATA <= addr ^ i;
+        vif.S_AXI_WDATA <= 64'(addr) ^ 64'(i);
         vif.S_AXI_WSTRB <= 8'hFF;
         vif.S_AXI_WVALID <= 1'h1;
-        vif.S_AXI_WLAST <= (i == wlast_at);
+        vif.S_AXI_WLAST <= (i == 32'(wlast_at));
         if (addr[31])
-          sif.PSLVERR1 <= (i == pslverr_at);
+          sif.PSLVERR1 <= (i == 32'(pslverr_at));
         else
-          sif.PSLVERR0 <= (i == pslverr_at);
+          sif.PSLVERR0 <= (i == 32'(pslverr_at));
         while (!vif.S_AXI_WREADY)
           @(posedge vif.clk);
         @(posedge vif.clk);
@@ -258,7 +261,7 @@ package bridge_stimulus_pkg;
           @(posedge vif.clk);
         if (vif.S_AXI_RRESP > combined_resp)
           combined_resp = vif.S_AXI_RRESP;
-        if (vif.S_AXI_RLAST != (i == len))
+        if (vif.S_AXI_RLAST != (i == 32'(len)))
           $display("ERROR: RLAST mismatch beat %0d", i);
         @(posedge vif.clk);
       end
@@ -347,8 +350,8 @@ package bridge_stimulus_pkg;
           pready_rand_seed = 32'h6b4d2e19;
           repeat (100) begin
             @(posedge vif.clk);
-            sif.PREADY0 <= $random(pready_rand_seed);
-            sif.PREADY1 <= $random(pready_rand_seed);
+            sif.PREADY0 <= 1'($unsigned($random(pready_rand_seed)));
+            sif.PREADY1 <= 1'($unsigned($random(pready_rand_seed)));
           end
           sif.PREADY0 <= 1'b1;
           sif.PREADY1 <= 1'b1;
@@ -498,5 +501,6 @@ package bridge_stimulus_pkg;
   endclass
 
 endpackage
+/* verilator lint_on DECLFILENAME */
 
 `endif

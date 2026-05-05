@@ -8,8 +8,10 @@ module apb_dual_mem_ws #(
 ) (
     input  wire logic                     clk,
     input  wire logic                     rst_n,
+    /* verilator lint_off UNUSEDSIGNAL */
     input  wire logic [ADDR_WIDTH-1:0]    PADDR0,
     input  wire logic [ADDR_WIDTH-1:0]    PADDR1,
+    /* verilator lint_on UNUSEDSIGNAL */
     input  wire logic                     PSEL0,
     input  wire logic                     PENABLE0,
     input  wire logic                     PWRITE0,

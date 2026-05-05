@@ -15,8 +15,9 @@ UVM_SV_LINT_SRCS = \
 	uvm/sv/models/apb_ext_mem_dual.sv \
 	uvm/sv/pkg/bridge_stimulus_pkg.sv
 
-# Elaboration smoke: multitop APB models + package in one invocation is deliberate.
-VERILATOR_LINT_UVM_FLAGS := --lint-only \
+# Default UVM SV lint is strict (separate tops; see scripts/verilator_lint_uvm_strict.sh).
+# Relaxed: one multitop elaboration with broad waivers (quick local smoke).
+VERILATOR_LINT_UVM_RELAXED_FLAGS := --lint-only \
 	-Wno-fatal \
 	-Wno-MULTITOP \
 	-Wno-DECLFILENAME \
@@ -52,7 +53,7 @@ endif
 # Default bench for: make wave | make gtk | make sim
 WAVETB ?= simple
 
-.PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv \
+.PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv lint-uvm-sv-relaxed \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
 	lint clean sim \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
@@ -88,8 +89,9 @@ help:
 	@echo ""
 	@echo "  UVM mirror (no VCS required):"
 	@echo "    make check-uvm-mirror   # literals vs test/tb_*.v (python3)"
-	@echo "    make lint-uvm-sv        # Verilator --lint-only on interfaces/models/stimulus pkg"
-	@echo "    make check-uvm          # both of the above"
+	@echo "    make lint-uvm-sv        # strict Verilator (per-module + shims; scripts/verilator_lint_uvm_strict.sh)"
+	@echo "    make lint-uvm-sv-relaxed # single-pass multitop; many warnings waived"
+	@echo "    make check-uvm          # check-uvm-mirror + lint-uvm-sv (strict)"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
@@ -129,8 +131,11 @@ check-uvm-mirror:
 	python3 $(CURDIR)/scripts/uvm_mirror_check.py --root $(CURDIR)
 
 lint-uvm-sv:
+	bash $(CURDIR)/scripts/verilator_lint_uvm_strict.sh
+
+lint-uvm-sv-relaxed:
 	$(VERILATOR) --version >/dev/null
-	$(VERILATOR) $(VERILATOR_LINT_UVM_FLAGS) $(UVM_SV_LINT_SRCS)
+	$(VERILATOR) $(VERILATOR_LINT_UVM_RELAXED_FLAGS) $(UVM_SV_LINT_SRCS)
 
 check-uvm: check-uvm-mirror lint-uvm-sv
 

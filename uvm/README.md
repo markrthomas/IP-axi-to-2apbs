@@ -18,8 +18,8 @@ classes in `bridge_uvm_tests_pkg`. Synopsys VCS is the primary target.
 
 Without Synopsys VCS, keep this tree aligned with the reference benches in `test/` by running
 from the repo root: **`make check-uvm-mirror`** (curated literals via `scripts/uvm_mirror_check.py`)
-and **`make lint-uvm-sv`** (Verilator elaboration smoke on interfaces, APB models, and
-`bridge_stimulus_pkg`). **`make check-uvm`** runs both.
+and **`make lint-uvm-sv`** (strict Verilator: `scripts/verilator_lint_uvm_strict.sh`, `-Wall`, one top per compile).
+Use **`make lint-uvm-sv-relaxed`** for a faster single-pass elaboration with broad warning waivers.
 
 ## Build
 
