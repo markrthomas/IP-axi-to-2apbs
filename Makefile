@@ -28,6 +28,13 @@ VERILATOR_LINT_UVM_RELAXED_FLAGS := --lint-only \
 
 IVERILOG_FLAGS ?= -g2012 -Wall -I$(CURDIR)/test
 
+# README → PDF (requires pandoc + a PDF engine, e.g. Tex Live: pdflatex)
+PANDOC ?= pandoc
+README_MD ?= README.md
+README_PDF ?= README.pdf
+PANDOC_PDF_ENGINE ?= pdflatex
+PANDOC_PDF_OPTS ?= -V geometry:margin=1in -V fontsize=11pt --resource-path=.:$(CURDIR)
+
 SIMPLE_TB = test/tb_axi4_to_apb4_2x_simple.v
 SIMPLE_RTL = src/axi4_to_apb4_2x_simple.v
 BURST_TB = test/tb_axi4_to_apb4_2x_burst.v
@@ -55,7 +62,7 @@ WAVETB ?= simple
 
 .PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv lint-uvm-sv-relaxed \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
-	lint clean sim \
+	lint clean sim readme-pdf \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param
 
@@ -92,6 +99,10 @@ help:
 	@echo "    make lint-uvm-sv        # strict Verilator (per-module + shims; scripts/verilator_lint_uvm_strict.sh)"
 	@echo "    make lint-uvm-sv-relaxed # single-pass multitop; many warnings waived"
 	@echo "    make check-uvm          # check-uvm-mirror + lint-uvm-sv (strict)"
+	@echo ""
+	@echo "  Docs:"
+	@echo "    make readme-pdf               # README.md → README.pdf (pandoc; override README_MD / README_PDF)"
+	@echo "    PANDOC_PDF_ENGINE=xelatex     # optional, for richer Unicode/fonts"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
@@ -248,6 +259,16 @@ gtk-param: wave-param
 gtk:
 	$(MAKE) gtk-$(WAVETB)
 
+# Requires: pandoc, and $(PANDOC_PDF_ENGINE) on PATH (typically from a LaTeX install).
+readme-pdf: $(README_PDF)
+
+$(README_PDF): $(README_MD)
+	@command -v $(PANDOC) >/dev/null 2>&1 || \
+		{ printf '%s\n' "Missing pandoc (https://pandoc.org/installing.html). On Debian/Ubuntu: sudo apt install pandoc texlive-latex-recommended texlive-fonts-recommended." >&2; exit 127; }; \
+	command -v $(PANDOC_PDF_ENGINE) >/dev/null 2>&1 || \
+		{ printf '%s\n' "Missing PDF engine '$(PANDOC_PDF_ENGINE)' on PATH. Install TeX Live or set PANDOC_PDF_ENGINE=wkhtmltopdf (wkhtmltopdf must be installed)" >&2; exit 127; }
+	$(PANDOC) $(PANDOC_PDF_OPTS) --pdf-engine=$(PANDOC_PDF_ENGINE) $(README_MD) -o $@
+
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param \
-		waves_*.fst waves_*.vcd burst.vcd param.vcd
+		waves_*.fst waves_*.vcd burst.vcd param.vcd $(README_PDF)
