@@ -7,3 +7,7 @@ sim_param
 *.fst
 waves_*.vcd
 waves_*.fst
+uvm/vcs/sim_*
+uvm/vcs/*.log
+uvm/vcs/csrc/
+uvm/vcs/simv.daidir/

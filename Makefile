@@ -2,6 +2,28 @@ IVERILOG ?= iverilog
 VVP ?= vvp
 GTKWAVE ?= gtkwave
 GTKWAVE_FLAGS ?=
+VERILATOR ?= verilator
+
+UVM_SV_LINT_SRCS = \
+	uvm/sv/interfaces/axi4_master_if.sv \
+	uvm/sv/interfaces/apb_burst_ext_side_if.sv \
+	uvm/sv/interfaces/apb_sel_tracker_if.sv \
+	uvm/sv/models/apb_dual_mem_simple.sv \
+	uvm/sv/models/apb_dual_mem_burst.sv \
+	uvm/sv/models/apb_dual_mem_ws.sv \
+	uvm/sv/models/apb_dual_mem_param.sv \
+	uvm/sv/models/apb_ext_mem_dual.sv \
+	uvm/sv/pkg/bridge_stimulus_pkg.sv
+
+# Elaboration smoke: multitop APB models + package in one invocation is deliberate.
+VERILATOR_LINT_UVM_FLAGS := --lint-only \
+	-Wno-fatal \
+	-Wno-MULTITOP \
+	-Wno-DECLFILENAME \
+	-Wno-UNUSEDSIGNAL \
+	-Wno-UNDRIVEN \
+	-Wno-WIDTHEXPAND \
+	-Wno-WIDTHTRUNC
 
 IVERILOG_FLAGS ?= -g2012 -Wall -I$(CURDIR)/test
 
@@ -30,7 +52,7 @@ endif
 # Default bench for: make wave | make gtk | make sim
 WAVETB ?= simple
 
-.PHONY: help default test test-all test-full check check-full \
+.PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
 	lint clean sim \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
@@ -63,6 +85,11 @@ help:
 	@echo "    make gtk                    # uses WAVETB (default: simple)"
 	@echo "    make gtk-simple | gtk-burst | gtk-burst-ext | gtk-simple-ws | gtk-param"
 	@echo "    GTKWAVE=/path/to/gtkwave  GTKWAVE_FLAGS='…'"
+	@echo ""
+	@echo "  UVM mirror (no VCS required):"
+	@echo "    make check-uvm-mirror   # literals vs test/tb_*.v (python3)"
+	@echo "    make lint-uvm-sv        # Verilator --lint-only on interfaces/models/stimulus pkg"
+	@echo "    make check-uvm          # both of the above"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
@@ -97,6 +124,15 @@ test-burst-ext: sim_burst_ext
 
 test-param: sim_param
 	$(VVP) sim_param
+
+check-uvm-mirror:
+	python3 $(CURDIR)/scripts/uvm_mirror_check.py --root $(CURDIR)
+
+lint-uvm-sv:
+	$(VERILATOR) --version >/dev/null
+	$(VERILATOR) $(VERILATOR_LINT_UVM_FLAGS) $(UVM_SV_LINT_SRCS)
+
+check-uvm: check-uvm-mirror lint-uvm-sv
 
 lint:
 	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_simple_w $(SIMPLE_TB) $(SIMPLE_RTL)
