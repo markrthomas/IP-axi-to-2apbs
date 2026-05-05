@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 
+`include "wave_macros.v"
+
 module tb_axi4_to_apb4_2x_simple;
 
   localparam ID_WIDTH   = 4;
@@ -189,6 +191,8 @@ module tb_axi4_to_apb4_2x_simple;
     .PREADY1(PREADY1),
     .PSLVERR1(PSLVERR1)
   );
+
+`IVL_OPTIONAL_DUMP(tb_axi4_to_apb4_2x_simple, "waves_simple.fst")
 
   // Clock generation
   initial begin

@@ -1,3 +1,9 @@
 sim_simple
 sim_burst
+sim_burst_ext
 sim_simple_ws_*
+sim_param
+*.vcd
+*.fst
+waves_*.vcd
+waves_*.fst

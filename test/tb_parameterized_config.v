@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 
+`include "wave_macros.v"
+
 module tb_parameterized_config;
 
   localparam ID_WIDTH     = 4;
@@ -57,9 +59,9 @@ module tb_parameterized_config;
     .APB_ADDR_BIT(APB_ADDR_BIT)
   ) dut (.*);
 
+`IVL_OPTIONAL_DUMP(tb_parameterized_config, "waves_param.fst")
+
   initial begin
-    $dumpfile("param.vcd");
-    $dumpvars(0, tb_parameterized_config);
     ACLK = 0;
     forever #5 ACLK = ~ACLK;
   end

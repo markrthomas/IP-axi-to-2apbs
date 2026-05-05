@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 
+`include "wave_macros.v"
+
 `ifndef READ_WAIT_CYCLES
 `define READ_WAIT_CYCLES 2
 `endif
@@ -196,6 +198,8 @@ module tb_axi4_to_apb4_2x_simple_ws;
     .PREADY1(PREADY1),
     .PSLVERR1(PSLVERR1)
   );
+
+`IVL_OPTIONAL_DUMP(tb_axi4_to_apb4_2x_simple_ws, "waves_simple_ws.fst")
 
   initial begin
     ACLK = 0;

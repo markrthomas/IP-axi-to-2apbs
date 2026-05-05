@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 
+`include "wave_macros.v"
+
 module tb_repro_issues;
 
   localparam ID_WIDTH   = 4;
@@ -49,9 +51,13 @@ module tb_repro_issues;
   reg  [DATA_WIDTH-1:0]     PRDATA0, PRDATA1;
   reg                       PREADY0, PSLVERR0, PREADY1, PSLVERR1;
 
+  integer                   pready_rand_seed;
+
   axi4_to_apb4_2x_burst #(
     .ID_WIDTH(ID_WIDTH), .ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH)
   ) dut (.*);
+
+`IVL_OPTIONAL_DUMP(tb_repro_issues, "waves_burst_ext.fst")
 
   initial begin
     ACLK = 0;
@@ -171,10 +177,11 @@ module tb_repro_issues;
     $display("--- Test 7: Wait states ---");
     fork
       begin
+        pready_rand_seed = 32'h6b4d2e19;
         repeat (100) begin
           @(posedge ACLK);
-          PREADY0 <= $random;
-          PREADY1 <= $random;
+          PREADY0 <= $random(pready_rand_seed);
+          PREADY1 <= $random(pready_rand_seed);
         end
         PREADY0 <= 1;
         PREADY1 <= 1;

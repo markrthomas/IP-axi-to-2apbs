@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 
+`include "wave_macros.v"
+
 module tb_axi4_to_apb4_2x_burst;
 
   localparam ID_WIDTH   = 4;
@@ -167,10 +169,10 @@ module tb_axi4_to_apb4_2x_burst;
     .PSLVERR1(PSLVERR1)
   );
 
+`IVL_OPTIONAL_DUMP(tb_axi4_to_apb4_2x_burst, "waves_burst.fst")
+
   // Clock generation
   initial begin
-    $dumpfile("burst.vcd");
-    $dumpvars(0, tb_axi4_to_apb4_2x_burst);
     ACLK = 0;
     forever #5 ACLK = ~ACLK;
   end
@@ -266,6 +268,7 @@ module tb_axi4_to_apb4_2x_burst;
 
   // Crossing burst to trigger DECERR
   task axi_crossing_write_decerr;
+    integer wseed;
   begin
     @(posedge ACLK);
     S_AXI_AWID    <= 0;
@@ -285,8 +288,9 @@ module tb_axi4_to_apb4_2x_burst;
     S_AXI_AWVALID <= 0;
 
     // Send two W beats; bridge should consume but not drive APB and return DECERR
+    wseed = 32'h3f9012ab;
     repeat (2) begin
-      S_AXI_WDATA  <= $random;
+      S_AXI_WDATA  <= $random(wseed);
       S_AXI_WLAST  <= (S_AXI_WDATA == 1) ? 1'b1 : 1'b0; // don't care, bridge ignores for DECERR
       S_AXI_WVALID <= 1;
       wait (S_AXI_WREADY);
