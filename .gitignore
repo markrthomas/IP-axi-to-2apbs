@@ -13,7 +13,7 @@ README.pdf
 
 # Local notes and tooling
 NOTES
-.codex/
+.codex
 uvm/vcs/sim_*
 uvm/vcs/*.log
 uvm/vcs/csrc/
