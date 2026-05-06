@@ -1,12 +1,15 @@
 package bridge_uvm_tests_pkg;
   import uvm_pkg::*;
-  `include "uvm_macros.svh"
+ `include "uvm_macros.svh"
   import bridge_stimulus_pkg::*;
+  import bridge_uvm_env_pkg::*;
 
   class test_bridge_simple extends uvm_test;
-    `uvm_component_utils(test_bridge_simple)
-    v_axi_if_64_t axi_vif;
-    bridge_axi_stim_64 stim;
+ `uvm_component_utils(test_bridge_simple)
+    v_axi_if_64_t       axi_vif;
+    bridge_env #(64)    env;
+    bridge_env_cfg      env_cfg;
+    bridge_axi_stim_64  stim;
 
     function new(string name, uvm_component parent);
       super.new(name, parent);
@@ -16,6 +19,16 @@ package bridge_uvm_tests_pkg;
       super.build_phase(phase);
       if (!uvm_config_db #(v_axi_if_64_t)::get(this, "", "axi_vif", axi_vif))
         `uvm_fatal(get_type_name(), "config_db axi_vif missing")
+
+      env_cfg = bridge_env_cfg::type_id::create("env_cfg");
+      env_cfg.apb_sel_bit = 31;
+      env_cfg.decode_kind = BRIDGE_DECODE_SIMPLE;
+      uvm_config_db #(bridge_env_cfg)::set(this, "env", "cfg", env_cfg);
+
+      env = bridge_env #(64)::type_id::create("env", this);
+      uvm_config_db #(virtual axi4_master_if #(4, 32, 64))::set(this, "env.axi_mon", "vif",
+                                                                axi_vif);
+
       stim = new();
       stim.set_if(axi_vif, null);
     endfunction
@@ -28,8 +41,10 @@ package bridge_uvm_tests_pkg;
   endclass
 
   class test_bridge_burst extends uvm_test;
-    `uvm_component_utils(test_bridge_burst)
-    v_axi_if_64_t axi_vif;
+ `uvm_component_utils(test_bridge_burst)
+    v_axi_if_64_t      axi_vif;
+    bridge_env #(64)   env;
+    bridge_env_cfg     env_cfg;
     bridge_axi_stim_64 stim;
 
     function new(string name, uvm_component parent);
@@ -40,6 +55,16 @@ package bridge_uvm_tests_pkg;
       super.build_phase(phase);
       if (!uvm_config_db #(v_axi_if_64_t)::get(this, "", "axi_vif", axi_vif))
         `uvm_fatal(get_type_name(), "axi_vif missing")
+
+      env_cfg = bridge_env_cfg::type_id::create("env_cfg");
+      env_cfg.apb_sel_bit = 31;
+      env_cfg.decode_kind = BRIDGE_DECODE_BURST;
+      uvm_config_db #(bridge_env_cfg)::set(this, "env", "cfg", env_cfg);
+
+      env = bridge_env #(64)::type_id::create("env", this);
+      uvm_config_db #(virtual axi4_master_if #(4, 32, 64))::set(this, "env.axi_mon", "vif",
+                                                                axi_vif);
+
       stim = new();
       stim.set_if(axi_vif, null);
     endfunction
@@ -52,9 +77,11 @@ package bridge_uvm_tests_pkg;
   endclass
 
   class test_bridge_burst_ext extends uvm_test;
-    `uvm_component_utils(test_bridge_burst_ext)
+ `uvm_component_utils(test_bridge_burst_ext)
     v_axi_if_64_t      axi_vif;
     v_apb_side_if_t    apb_if;
+    bridge_env #(64)   env;
+    bridge_env_cfg     env_cfg;
     bridge_axi_stim_64 stim;
 
     function new(string name, uvm_component parent);
@@ -67,6 +94,18 @@ package bridge_uvm_tests_pkg;
         `uvm_fatal(get_type_name(), "axi_vif missing")
       if (!uvm_config_db #(v_apb_side_if_t)::get(this, "", "apb_side_vif", apb_if))
         `uvm_fatal(get_type_name(), "apb_side_vif missing")
+
+      env_cfg = bridge_env_cfg::type_id::create("env_cfg");
+      env_cfg.apb_sel_bit = 31;
+      env_cfg.decode_kind = BRIDGE_DECODE_BURST;
+      env_cfg.apb_mem_addr_msb = 12;
+      env_cfg.apb_mem_addr_lsb = 3;
+      uvm_config_db #(bridge_env_cfg)::set(this, "env", "cfg", env_cfg);
+
+      env = bridge_env #(64)::type_id::create("env", this);
+      uvm_config_db #(virtual axi4_master_if #(4, 32, 64))::set(this, "env.axi_mon", "vif",
+                                                                axi_vif);
+
       stim = new();
       stim.set_if(axi_vif, apb_if);
     endfunction
@@ -88,11 +127,13 @@ package bridge_uvm_tests_pkg;
   endclass
 
   class test_bridge_simple_ws extends uvm_test;
-    `uvm_component_utils(test_bridge_simple_ws)
+ `uvm_component_utils(test_bridge_simple_ws)
 
-    int unsigned           read_cycles = 2;
+    int unsigned          read_cycles = 2;
     v_axi_if_64_t axi_vif;
-    bridge_axi_stim_64     stim;
+    bridge_env #(64)      env;
+    bridge_env_cfg        env_cfg;
+    bridge_axi_stim_64    stim;
 
     function new(string name, uvm_component parent);
       super.new(name, parent);
@@ -103,6 +144,16 @@ package bridge_uvm_tests_pkg;
       if (!uvm_config_db #(v_axi_if_64_t)::get(this, "", "axi_vif", axi_vif))
         `uvm_fatal(get_type_name(), "axi_vif missing")
       void'(uvm_config_db #(int unsigned)::get(this, "", "read_wait_cycles", read_cycles));
+
+      env_cfg = bridge_env_cfg::type_id::create("env_cfg");
+      env_cfg.apb_sel_bit = 31;
+      env_cfg.decode_kind = BRIDGE_DECODE_SIMPLE;
+      uvm_config_db #(bridge_env_cfg)::set(this, "env", "cfg", env_cfg);
+
+      env = bridge_env #(64)::type_id::create("env", this);
+      uvm_config_db #(virtual axi4_master_if #(4, 32, 64))::set(this, "env.axi_mon", "vif",
+                                                                axi_vif);
+
       stim = new();
       stim.set_if(axi_vif, null);
     endfunction
@@ -122,7 +173,7 @@ package bridge_uvm_tests_pkg;
       if (r0 !== 64'h1234_5678_9ABC_DEF0)
         `uvm_fatal(get_type_name(), "APB1 readback mismatch (ws)")
 
-      `uvm_info(
+ `uvm_info(
           get_type_name(),
           $sformatf("SIMPLE WS TEST PASSED (READ_WAIT_CYCLES=%0d)", read_cycles),
           UVM_MEDIUM)
@@ -132,10 +183,13 @@ package bridge_uvm_tests_pkg;
   endclass
 
   class test_bridge_parameterized_cfg extends uvm_test;
-    `uvm_component_utils(test_bridge_parameterized_cfg)
+ `uvm_component_utils(test_bridge_parameterized_cfg)
     bridge_axi_stim_32 stim;
     v_axi_if_32_t        axi_vif;
     v_apb_sel_tracker_t  sel_track;
+
+    bridge_env #(32)     env;
+    bridge_env_cfg       env_cfg;
 
     function new(string name, uvm_component parent);
       super.new(name, parent);
@@ -148,6 +202,14 @@ package bridge_uvm_tests_pkg;
       if (!uvm_config_db #(v_apb_sel_tracker_t)::get(this, "", "apb_sel_tracker", sel_track))
         `uvm_fatal(get_type_name(), "apb_sel_tracker missing")
 
+      env_cfg = bridge_env_cfg::type_id::create("env_cfg");
+      env_cfg.apb_sel_bit = 20;
+      uvm_config_db #(bridge_env_cfg)::set(this, "env", "cfg", env_cfg);
+
+      env = bridge_env #(32)::type_id::create("env", this);
+      uvm_config_db #(virtual axi4_master_if #(4, 32, 32))::set(this, "env.axi_mon", "vif",
+                                                                axi_vif);
+
       stim = new();
       stim.connect_if(axi_vif);
     endfunction
@@ -157,7 +219,7 @@ package bridge_uvm_tests_pkg;
       fork
         begin
           #(10000);
-          `uvm_fatal(get_type_name(), "PARAMETERIZED TIMEOUT")
+ `uvm_fatal(get_type_name(), "PARAMETERIZED TIMEOUT")
         end
         begin
           stim.run_mirror_param(sel_track);

@@ -13,5 +13,7 @@ ${UVM_HOME}/src/uvm.sv
 
 ../sv/models/apb_dual_mem_param.sv
 ../sv/pkg/bridge_stimulus_pkg.sv
+../sv/interfaces/apb_mon_if.sv
+../sv/pkg/bridge_uvm_env_pkg.sv
 ../sv/pkg/bridge_uvm_tests_pkg.sv
 ../tb/tb_uvm_parameterized.sv

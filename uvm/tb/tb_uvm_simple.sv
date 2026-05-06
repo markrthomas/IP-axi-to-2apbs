@@ -5,6 +5,7 @@ module tb_uvm_simple;
   import uvm_pkg::*;
   import bridge_stimulus_pkg::*;
   import bridge_uvm_tests_pkg::*;
+  import bridge_uvm_env_pkg::*;
 
   localparam ID_WIDTH   = 4;
   localparam ADDR_WIDTH = 32;
@@ -115,6 +116,42 @@ module tb_uvm_simple;
       .PSLVERR1(PSLVERR1)
   );
 
+  apb_mon_if #(
+      .ADDR_WIDTH (ADDR_WIDTH),
+      .DATA_WIDTH (DATA_WIDTH)
+  ) ap_m0 (
+      .clk(clk),
+      .rst_n(rst_n),
+      .PADDR(PADDR0),
+      .PPROT(PPROT0),
+      .PSEL(PSEL0),
+      .PENABLE(PENABLE0),
+      .PWRITE(PWRITE0),
+      .PWDATA(PWDATA0),
+      .PSTRB(PSTRB0),
+      .PRDATA(PRDATA0),
+      .PREADY(PREADY0),
+      .PSLVERR(PSLVERR0)
+  );
+
+  apb_mon_if #(
+      .ADDR_WIDTH (ADDR_WIDTH),
+      .DATA_WIDTH (DATA_WIDTH)
+  ) ap_m1 (
+      .clk(clk),
+      .rst_n(rst_n),
+      .PADDR(PADDR1),
+      .PPROT(PPROT1),
+      .PSEL(PSEL1),
+      .PENABLE(PENABLE1),
+      .PWRITE(PWRITE1),
+      .PWDATA(PWDATA1),
+      .PSTRB(PSTRB1),
+      .PRDATA(PRDATA1),
+      .PREADY(PREADY1),
+      .PSLVERR(PSLVERR1)
+  );
+
   initial begin
     clk = 1'b0;
     forever #5 clk = ~clk;
@@ -126,8 +163,22 @@ module tb_uvm_simple;
   end
 
   initial begin
-    uvm_config_db#(bridge_stimulus_pkg::v_axi_if_64_t)::set(null, "uvm_test_top",
+    uvm_config_db #(bridge_stimulus_pkg::v_axi_if_64_t)::set(null, "uvm_test_top",
                                                             "axi_vif", axi_if);
+    uvm_config_db #(
+        virtual apb_mon_if #(
+            .ADDR_WIDTH(ADDR_WIDTH),
+            .DATA_WIDTH(DATA_WIDTH)
+        )
+    )::
+        set(null, "uvm_test_top.env.apb_mon0", "vif", ap_m0);
+    uvm_config_db #(
+        virtual apb_mon_if #(
+            .ADDR_WIDTH(ADDR_WIDTH),
+            .DATA_WIDTH(DATA_WIDTH)
+        )
+    )::
+        set(null, "uvm_test_top.env.apb_mon1", "vif", ap_m1);
     run_test("test_bridge_simple");
   end
 

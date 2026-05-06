@@ -34,6 +34,10 @@ done
   uvm/lint/vlint_shim_apb_sel_tracker_if.sv \
   uvm/sv/interfaces/apb_sel_tracker_if.sv
 
+"$V" "${Flags[@]}" "${IfWaiver[@]}" --top-module vlint_shim_apb_mon_if \
+  uvm/lint/vlint_shim_apb_mon_if.sv \
+  uvm/sv/interfaces/apb_mon_if.sv
+
 "$V" "${Flags[@]}" "${IfWaiver[@]}" --top-module vlint_shim_bridge_stimulus_pkg \
   uvm/sv/interfaces/axi4_master_if.sv \
   uvm/sv/interfaces/apb_burst_ext_side_if.sv \

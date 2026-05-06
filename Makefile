@@ -8,6 +8,7 @@ UVM_SV_LINT_SRCS = \
 	uvm/sv/interfaces/axi4_master_if.sv \
 	uvm/sv/interfaces/apb_burst_ext_side_if.sv \
 	uvm/sv/interfaces/apb_sel_tracker_if.sv \
+	uvm/sv/interfaces/apb_mon_if.sv \
 	uvm/sv/models/apb_dual_mem_simple.sv \
 	uvm/sv/models/apb_dual_mem_burst.sv \
 	uvm/sv/models/apb_dual_mem_ws.sv \
@@ -28,12 +29,18 @@ VERILATOR_LINT_UVM_RELAXED_FLAGS := --lint-only \
 
 IVERILOG_FLAGS ?= -g2012 -Wall -I$(CURDIR)/test
 
-# README → PDF (requires pandoc + a PDF engine, e.g. Tex Live: pdflatex)
+# Markdown to PDF (requires pandoc + $(PANDOC_PDF_ENGINE), e.g. pdflatex from TeX Live)
 PANDOC ?= pandoc
 README_MD ?= README.md
 README_PDF ?= README.pdf
 PANDOC_PDF_ENGINE ?= pdflatex
-PANDOC_PDF_OPTS ?= -V geometry:margin=1in -V fontsize=11pt --resource-path=.:$(CURDIR)
+PANDOC_PDF_VARS ?= -V geometry:margin=1in -V fontsize=11pt
+
+# All Markdown sources (repo root; skips .git), each becomes a sibling .pdf via md-pdfs
+ALL_MD := $(shell find . -name .git -prune -o -name '*.md' -type f -print 2>/dev/null | LC_ALL=C sort)
+ALL_MD_PDF := $(ALL_MD:%.md=%.pdf)
+
+README_PDF_DEFAULT := $(patsubst %.md,%.pdf,$(README_MD))
 
 SIMPLE_TB = test/tb_axi4_to_apb4_2x_simple.v
 SIMPLE_RTL = src/axi4_to_apb4_2x_simple.v
@@ -62,16 +69,16 @@ WAVETB ?= simple
 
 .PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv lint-uvm-sv-relaxed \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
-	lint clean sim readme-pdf \
+	lint clean sim readme-pdf md-pdfs \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param
 
 default: help
 
 help:
-	@echo "IP-axi-to-2apbs — common targets"
+	@echo "IP-axi-to-2apbs - common targets"
 	@echo ""
-	@echo "  Tests (fast → full):"
+	@echo "  Tests (fast -> full):"
 	@echo "    make test          # same as test-all (simple + burst)"
 	@echo "    make test-all"
 	@echo "    make test-full     # all TBs except wait-state sweep"
@@ -82,17 +89,17 @@ help:
 	@echo ""
 	@echo "  Build simulators only:"
 	@echo "    make sim                    # WAVETB=simple|burst|burst-ext|simple-ws|param"
-	@echo "    make sim_simple sim_burst …"
+	@echo "    make sim_simple sim_burst ..."
 	@echo ""
 	@echo "  Waveforms (then open GTKWave yourself, or use gtk targets below):"
 	@echo "    make wave                   # WAVETB=simple|burst|burst-ext|simple-ws|param"
-	@echo "    make wave-simple | wave-burst | …"
+	@echo "    make wave-simple | wave-burst | ..."
 	@echo "    WAVEFMT=fst|vcd   WAVEFILE=path   WAIT_CYCLES=n (for simple-ws)"
 	@echo ""
 	@echo "  GTKWave (simulate + launch viewer):"
 	@echo "    make gtk                    # uses WAVETB (default: simple)"
 	@echo "    make gtk-simple | gtk-burst | gtk-burst-ext | gtk-simple-ws | gtk-param"
-	@echo "    GTKWAVE=/path/to/gtkwave  GTKWAVE_FLAGS='…'"
+	@echo "    GTKWAVE=/path/to/gtkwave  GTKWAVE_FLAGS='...'"
 	@echo ""
 	@echo "  UVM mirror (no VCS required):"
 	@echo "    make check-uvm-mirror   # literals vs test/tb_*.v (python3)"
@@ -101,7 +108,8 @@ help:
 	@echo "    make check-uvm          # check-uvm-mirror + lint-uvm-sv (strict)"
 	@echo ""
 	@echo "  Docs:"
-	@echo "    make readme-pdf               # README.md → README.pdf (pandoc; override README_MD / README_PDF)"
+	@echo "    make readme-pdf               # README.md -> README.pdf (override README_MD / README_PDF)"
+	@echo "    make md-pdfs                  # every *.md under . (except .git) -> sibling .pdf"
 	@echo "    PANDOC_PDF_ENGINE=xelatex     # optional, for richer Unicode/fonts"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
@@ -188,17 +196,18 @@ else
   $(error Unknown WAVETB '$(WAVETB)'. Use: simple burst burst-ext simple-ws param)
 endif
 
-# Unified wave/gtk defaults (depends on WAVETB)
+# Unified wave default (depends on WAVETB). Keep this target-specific so the
+# explicit wave-* targets can use their own WAVEFILE defaults.
 ifeq ($(WAVETB),simple)
-  WAVEFILE ?= waves_simple.$(WAVEFMT)
+  wave: WAVEFILE ?= waves_simple.$(WAVEFMT)
 else ifeq ($(WAVETB),burst)
-  WAVEFILE ?= waves_burst.$(WAVEFMT)
+  wave: WAVEFILE ?= waves_burst.$(WAVEFMT)
 else ifeq ($(WAVETB),burst-ext)
-  WAVEFILE ?= waves_burst_ext.$(WAVEFMT)
+  wave: WAVEFILE ?= waves_burst_ext.$(WAVEFMT)
 else ifeq ($(WAVETB),simple-ws)
-  WAVEFILE ?= waves_simple_ws.$(WAVEFMT)
+  wave: WAVEFILE ?= waves_simple_ws.$(WAVEFMT)
 else ifeq ($(WAVETB),param)
-  WAVEFILE ?= waves_param.$(WAVEFMT)
+  wave: WAVEFILE ?= waves_param.$(WAVEFMT)
 endif
 
 sim: $(SIM_BIN)
@@ -231,7 +240,7 @@ wave-param: sim_param
 	$(VVP) sim_param $(VVP_WAVEFLAGS) +wave +wavefile=$(WAVEFILE)
 
 # Launch viewer after a wave-* target (simulation must have written $(WAVEFILE)).
-GTK_OPEN = @printf 'Opening %s in GTKWave…\n' "$(WAVEFILE)"; \
+GTK_OPEN = @printf 'Opening %s in GTKWave...\n' "$(WAVEFILE)"; \
 	command -v "$(GTKWAVE)" >/dev/null 2>&1 || { printf '%s\n' "Missing viewer: install gtkwave or set GTKWAVE=/path/to/gtkwave" >&2; exit 127; }; \
 	$(GTKWAVE) $(GTKWAVE_FLAGS) "$(WAVEFILE)" &
 
@@ -255,20 +264,31 @@ gtk-param: WAVEFILE ?= waves_param.$(WAVEFMT)
 gtk-param: wave-param
 	$(GTK_OPEN)
 
-# Dispatch to gtk-simple, gtk-burst, … (avoids duplicating per-bench rules).
+# Dispatch to gtk-simple, gtk-burst, ... (avoids duplicating per-bench rules).
 gtk:
 	$(MAKE) gtk-$(WAVETB)
 
-# Requires: pandoc, and $(PANDOC_PDF_ENGINE) on PATH (typically from a LaTeX install).
+%.pdf: %.md
+	@command -v $(PANDOC) >/dev/null 2>&1 || \
+		{ printf '%s\n' "Missing pandoc (https://pandoc.org/installing.html). On Debian/Ubuntu: sudo apt install pandoc texlive-latex-recommended texlive-fonts-recommended." >&2; exit 127; }
+	@command -v $(PANDOC_PDF_ENGINE) >/dev/null 2>&1 || \
+		{ printf '%s\n' "Missing PDF engine '$(PANDOC_PDF_ENGINE)' on PATH. Install TeX Live or set PANDOC_PDF_ENGINE=wkhtmltopdf (wkhtmltopdf must be installed)" >&2; exit 127; }
+	$(PANDOC) $(PANDOC_PDF_VARS) --resource-path=$(dir $(abspath $<)):$(CURDIR) --pdf-engine=$(PANDOC_PDF_ENGINE) $< -o $@
+
+md-pdfs: $(ALL_MD_PDF)
+
 readme-pdf: $(README_PDF)
 
+# Custom README output path (when it is not the usual sibling of README_MD)
+ifneq ($(README_PDF),$(README_PDF_DEFAULT))
 $(README_PDF): $(README_MD)
 	@command -v $(PANDOC) >/dev/null 2>&1 || \
-		{ printf '%s\n' "Missing pandoc (https://pandoc.org/installing.html). On Debian/Ubuntu: sudo apt install pandoc texlive-latex-recommended texlive-fonts-recommended." >&2; exit 127; }; \
-	command -v $(PANDOC_PDF_ENGINE) >/dev/null 2>&1 || \
+		{ printf '%s\n' "Missing pandoc (https://pandoc.org/installing.html). On Debian/Ubuntu: sudo apt install pandoc texlive-latex-recommended texlive-fonts-recommended." >&2; exit 127; }
+	@command -v $(PANDOC_PDF_ENGINE) >/dev/null 2>&1 || \
 		{ printf '%s\n' "Missing PDF engine '$(PANDOC_PDF_ENGINE)' on PATH. Install TeX Live or set PANDOC_PDF_ENGINE=wkhtmltopdf (wkhtmltopdf must be installed)" >&2; exit 127; }
-	$(PANDOC) $(PANDOC_PDF_OPTS) --pdf-engine=$(PANDOC_PDF_ENGINE) $(README_MD) -o $@
+	$(PANDOC) $(PANDOC_PDF_VARS) --resource-path=$(dir $(abspath $<)):$(CURDIR) --pdf-engine=$(PANDOC_PDF_ENGINE) $< -o $@
+endif
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param \
-		waves_*.fst waves_*.vcd burst.vcd param.vcd $(README_PDF)
+		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF)

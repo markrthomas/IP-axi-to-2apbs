@@ -32,6 +32,8 @@ SUITES: tuple[Suite, ...] = (
         "simple",
         "test/tb_axi4_to_apb4_2x_simple.v",
         (
+            "uvm/sv/interfaces/apb_mon_if.sv",
+            "uvm/sv/pkg/bridge_uvm_env_pkg.sv",
             "uvm/sv/pkg/bridge_stimulus_pkg.sv",
             "uvm/tb/tb_uvm_simple.sv",
             "uvm/sv/pkg/bridge_uvm_tests_pkg.sv",
@@ -42,12 +44,18 @@ SUITES: tuple[Suite, ...] = (
             "32'h0000_0010",
             "32'h8000_0020",
         ),
-        needles_mirror_only=("run_mirror_simple", "test_bridge_simple"),
+        needles_mirror_only=(
+            "class bridge_scoreboard",
+            "run_mirror_simple",
+            "test_bridge_simple",
+        ),
     ),
     Suite(
         "burst",
         "test/tb_axi4_to_apb4_2x_burst.v",
         (
+            "uvm/sv/interfaces/apb_mon_if.sv",
+            "uvm/sv/pkg/bridge_uvm_env_pkg.sv",
             "uvm/sv/pkg/bridge_stimulus_pkg.sv",
             "uvm/tb/tb_uvm_burst.sv",
             "uvm/sv/pkg/bridge_uvm_tests_pkg.sv",
@@ -58,12 +66,19 @@ SUITES: tuple[Suite, ...] = (
             "32'h7FFF_FFF8",
             "axi_crossing_write_decerr",
         ),
-        needles_mirror_only=("axi_crossing_write_decerr", "run_mirror_burst", "test_bridge_burst"),
+        needles_mirror_only=(
+            "class bridge_scoreboard",
+            "axi_crossing_write_decerr",
+            "run_mirror_burst",
+            "test_bridge_burst",
+        ),
     ),
     Suite(
         "burst_ext",
         "test/tb_axi4_to_apb4_2x_burst_extended.v",
         (
+            "uvm/sv/interfaces/apb_mon_if.sv",
+            "uvm/sv/pkg/bridge_uvm_env_pkg.sv",
             "uvm/sv/pkg/bridge_stimulus_pkg.sv",
             "uvm/tb/tb_uvm_burst_ext.sv",
             "uvm/sv/pkg/bridge_uvm_tests_pkg.sv",
@@ -77,12 +92,19 @@ SUITES: tuple[Suite, ...] = (
             "32'h7FFF_FFF8",
             "32'h6b4d2e19",
         ),
-        needles_mirror_only=("run_mirror_burst_ext", "test_bridge_burst_ext", "apb_burst_ext_side_if"),
+        needles_mirror_only=(
+            "class bridge_scoreboard",
+            "run_mirror_burst_ext",
+            "test_bridge_burst_ext",
+            "apb_burst_ext_side_if",
+        ),
     ),
     Suite(
         "simple_ws",
         "test/tb_axi4_to_apb4_2x_simple_ws.v",
         (
+            "uvm/sv/interfaces/apb_mon_if.sv",
+            "uvm/sv/pkg/bridge_uvm_env_pkg.sv",
             "uvm/tb/tb_uvm_simple_ws.sv",
             "uvm/sv/pkg/bridge_uvm_tests_pkg.sv",
             "uvm/vcs/Makefile",
@@ -93,6 +115,7 @@ SUITES: tuple[Suite, ...] = (
             "SIMPLE WS TEST PASSED (READ_WAIT_CYCLES=%0d)",
         ),
         needles_mirror_only=(
+            "class bridge_scoreboard",
             "BRIDGE_READ_WS",
             "read_wait_cycles",
             "test_bridge_simple_ws",
@@ -103,6 +126,8 @@ SUITES: tuple[Suite, ...] = (
         "parameterized",
         "test/tb_parameterized_config.v",
         (
+            "uvm/sv/interfaces/apb_mon_if.sv",
+            "uvm/sv/pkg/bridge_uvm_env_pkg.sv",
             "uvm/sv/pkg/bridge_stimulus_pkg.sv",
             "uvm/tb/tb_uvm_parameterized.sv",
             "uvm/sv/pkg/bridge_uvm_tests_pkg.sv",
@@ -113,7 +138,12 @@ SUITES: tuple[Suite, ...] = (
             "32'h0010_0000",
             "SUCCESS: DECERR for wrong size",
         ),
-        needles_mirror_only=("run_mirror_param", "apb_sel_tracker", "test_bridge_parameterized_cfg"),
+        needles_mirror_only=(
+            "class bridge_scoreboard",
+            "run_mirror_param",
+            "apb_sel_tracker",
+            "test_bridge_parameterized_cfg",
+        ),
     ),
 )
 
