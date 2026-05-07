@@ -6,7 +6,12 @@ VCS       ?= vcs
 VCS_FLAGS ?= -full64 -sverilog -timescale=1ns/1ps +acc +vpi
 
 UVM_SRC   = +incdir+$(UVM_HOME)/src $(UVM_HOME)/src/uvm.sv
-IFDIR     = +incdir+$(abspath ../sv/interfaces)
+IFDIR     = +incdir+$(abspath ../sv/interfaces) \
+            +incdir+$(abspath ../sv/pkg) \
+            +incdir+$(abspath ../sv/env) \
+            +incdir+$(abspath ../sv/monitors) \
+            +incdir+$(abspath ../sv/scoreboard) \
+            +incdir+$(abspath ../sv/transactions)
 RTL       = $(abspath ../../src)
 
 READ_WS ?= 2

@@ -6,6 +6,7 @@ IP AXI to 2× APB4 bridge RTL and self-checking testbenches.
 
 - `src/` - canonical RTL entrypoints for the bridges
 - `test/` - canonical testbench entrypoints
+- `uvm/` - UVM-based verification environment (VCS primary target)
 - `doc/` - documentation
 
 ## Design contract
