@@ -2,6 +2,34 @@
 
 This directory contains a UVM-based verification environment for the AXI4-to-APB4 bridge. It mirrors the Icarus Verilog RTL testbenches found in `test/` but provides a more robust, object-oriented verification framework using SystemVerilog and UVM.
 
+## Ramp-up (suggested reading order)
+
+| Step | Document / code | What you get |
+|------|-----------------|--------------|
+| 1 | [`../doc/design_contract.md`](../doc/design_contract.md) | Expected bridge behavior and integration assumptions. |
+| 2 | This README (overview + tables below) | Mapping from Icarus TBs to UVM tops and components. |
+| 3 | [`sv/README.md`](sv/README.md) + subdirectory READMEs | Navigate `pkg/`, `env/`, `monitors/`, `scoreboard/`, etc. |
+| 4 | [`sv/env/bridge_env.sv`](sv/env/bridge_env.sv) | How analysis ports connect to the scoreboard. |
+| 5 | [`sv/scoreboard/bridge_scoreboard.sv`](sv/scoreboard/bridge_scoreboard.sv) | Prediction and checking (with [`GEMINI.md`](GEMINI.md) for DECERR/shadow-RAM detail). |
+| 6 | [`GEMINI.md`](GEMINI.md) | Extend tests, debug mismatches, quality gates. |
+
+## RTL vs UVM at a glance
+
+```mermaid
+flowchart LR
+  subgraph ref [Reference flow]
+    IVER[Icarus test/]
+  end
+  subgraph uvm [UVM flow]
+    UVM[uvm/ VCS]
+  end
+  RTL[src/ RTL]
+  IVER --> RTL
+  UVM --> RTL
+```
+
+Both flows hit the same DUT sources under `src/`; UVM adds monitors, TLM, and a predictive scoreboard. Stimulus helpers intentionally mirror the Icarus benches—see `scripts/uvm_mirror_check.py` (`make check-uvm-mirror` from the repo root).
+
 ## Architecture
 
 The environment is designed to be highly configurable, supporting both 32-bit and 64-bit data widths, and different bridge variants (Simple vs. Burst).
@@ -40,6 +68,23 @@ The environment is designed to be highly configurable, supporting both 32-bit an
          +--------------------------------------------------------------------------+
 ```
 
+### TLM data path (monitor → scoreboard)
+
+```mermaid
+flowchart LR
+  DUT[(DUT)]
+  AXIM[bridge_axi_monitor]
+  APB0[bridge_apb_monitor 0]
+  APB1[bridge_apb_monitor 1]
+  SB[bridge_scoreboard]
+  DUT --> AXIM
+  DUT --> APB0
+  DUT --> APB1
+  AXIM -->|ap_wr ap_rd| SB
+  APB0 -->|ap| SB
+  APB1 -->|ap| SB
+```
+
 ## Layout
 
 | Icarus test | UVM top | Test class | Description |
@@ -50,28 +95,42 @@ The environment is designed to be highly configurable, supporting both 32-bit an
 | `tb_axi4_to_apb4_2x_simple_ws` | `tb_uvm_simple_ws` | `test_bridge_simple_ws` | Simple test with APB wait-states. |
 | `tb_parameterized_config` | `tb_uvm_parameterized` | `test_bridge_parameterized_cfg` | 32-bit bridge with custom select bit. |
 
-## Directory Structure
+## Directory structure
 
-The UVM environment is organized into modular directories under `uvm/sv/`:
+| Path | README / role |
+|------|----------------|
+| [`sv/`](sv/README.md) | All SystemVerilog UVM collateral; start here for per-folder tables. |
+| [`sv/pkg/`](sv/pkg/README.md) | `bridge_stimulus_pkg`, `bridge_uvm_env_pkg`, `bridge_uvm_tests_pkg`. |
+| [`sv/env/`](sv/env/README.md) | `bridge_env`, `bridge_env_cfg`. |
+| [`sv/monitors/`](sv/monitors/README.md) | AXI and APB passive monitors. |
+| [`sv/scoreboard/`](sv/scoreboard/README.md) | Predict + check. |
+| [`sv/transactions/`](sv/transactions/README.md) | Sequence items and decode enum. |
+| [`sv/interfaces/`](sv/interfaces/README.md) | `axi4_master_if`, `apb_mon_if`, … |
+| [`sv/models/`](sv/models/README.md) | APB behavioral memories. |
+| [`tb/`](tb/README.md) | Top modules and `run_test(...)` wiring. |
+| [`vcs/`](vcs/README.md) | Makefile and file lists for Synopsys VCS. |
+| [`lint/`](lint/README.md) | Verilator lint shims. |
 
-- `pkg/`: UVM packages (`bridge_uvm_env_pkg.sv`, `bridge_uvm_tests_pkg.sv`, `bridge_stimulus_pkg.sv`).
-- `env/`: Environment and configuration classes (`bridge_env.sv`, `bridge_env_cfg.sv`).
-- `monitors/`: AXI and APB monitors (`bridge_axi_monitor.sv`, `bridge_apb_monitor.sv`).
-- `scoreboard/`: Verification scoreboard logic (`bridge_scoreboard.sv`).
-- `transactions/`: Transaction sequence items (`bridge_transactions.sv`).
-- `interfaces/`: SystemVerilog interfaces.
-- `models/`: APB slave memory models.
-
-### Package Hierarchy
+### Package hierarchy
 
 ```text
+bridge_stimulus_pkg.sv
+    +-- (stimulus helpers)
+
 bridge_uvm_env_pkg.sv
-├── bridge_env_cfg.sv
-├── bridge_transactions.sv
-├── bridge_axi_monitor.sv
-├── bridge_apb_monitor.sv
-├── bridge_scoreboard.sv
-└── bridge_env.sv
+    +-- import bridge_stimulus_pkg
+    +-- bridge_env_cfg.sv          (from ../env/)
+    +-- bridge_transactions.sv     (from ../transactions/)
+    +-- [prediction functions in-package]
+    +-- bridge_axi_monitor.sv      (+incdir+ ../monitors/)
+    +-- bridge_apb_monitor.sv
+    +-- bridge_scoreboard.sv
+    +-- bridge_env.sv              (from ../env/, via +incdir+)
+
+bridge_uvm_tests_pkg.sv
+    +-- import bridge_stimulus_pkg
+    +-- import bridge_uvm_env_pkg
+    +-- test classes (bridge_base_test, test_bridge_*)
 ```
 
 ## Verification Components

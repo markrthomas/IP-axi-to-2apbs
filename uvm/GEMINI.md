@@ -2,9 +2,32 @@
 
 This document provides technical details for developers looking to extend or debug the UVM environment.
 
-## Adding a New Test
+Related navigation: [`README.md`](README.md) (architecture), [`sv/README.md`](sv/README.md) (per-folder maps).
 
-To add a new test case:
+## `uvm_config_db` usage (this environment)
+
+| Key type | Typical path | Set by | Consumed by |
+|----------|--------------|--------|-------------|
+| `bridge_env_cfg` | `"env"`, field `"cfg"` | `bridge_base_test::build_phase` | `bridge_env::build_phase` |
+| `virtual axi4_master_if #(...)` | `"env.axi_mon"`, `"vif"` | `bridge_base_test` | `bridge_axi_monitor` |
+| `v_axi_if_64_t` / `v_axi_if_32_t` | `""`, `"axi_vif"` | Testbench top | `bridge_base_test` |
+| Other VIP/IF handles | per TB | Top or test | Monitors / stimulus |
+
+Paths use UVM component hierarchy strings: the test creates `env`, so the AXI monitor is `"env.axi_mon"`.
+
+## Adding a new test
+
+```mermaid
+flowchart TD
+  A[Subclass bridge_base_test] --> B[Override configure_env / run_phase]
+  B --> C{Reuse existing top?}
+  C -->|yes| D[Pass new +UVM_TESTNAME or run_test string]
+  C -->|no| E[New tb_uvm_*.sv + DUT/mem wiring]
+  E --> F[files_*.f or Makefile RTL/mem list]
+  F --> G[New sim_* target in uvm/vcs/Makefile]
+```
+
+Checklist:
 
 1.  **Define a new test class** in `uvm/sv/pkg/bridge_uvm_tests_pkg.sv` (or a new file included in that package).
     - Inherit from **`bridge_base_test #(DW)`** (where `DW` is 32 or 64).
@@ -13,7 +36,7 @@ To add a new test case:
 2.  **Create a new top-level TB** in `uvm/tb/` if needed (e.g., `tb_uvm_new_feature.sv`).
     - Instantiate the DUT and interfaces.
     - Call `run_test()`.
-3.  **Add a `.f` file** in `uvm/vcs/` (e.g., `files_new_feature.f`) listing all required files.
+3.  **Add a `.f` file** in `uvm/vcs/` (e.g., `files_new_feature.f`) listing all required files (and mirror **Makefile `+incdir+`** from [`vcs/README.md`](vcs/README.md)).
 4.  **Update the Makefile** in `uvm/vcs/Makefile` to include a new simulation target.
 
 ## Extending the Stimulus
@@ -28,18 +51,40 @@ To transition to UVM sequences:
 
 The `bridge_scoreboard` is the heart of the verification. It uses TLM imp ports to receive transactions from the AXI and APB monitors.
 
-### DECERR Prediction
+### DECERR prediction
+
 The bridge variants handle illegal transactions differently. The scoreboard uses `bridge_aw_txn_decerr` and `bridge_ar_txn_decerr` to match the RTL's internal error decoding logic.
-- **SIMPLE variant:** Any burst (`len > 0`) or incorrect `axsize` results in `DECERR`.
-- **BURST variant:** Bursts that cross the `apb_sel_bit` boundary, or have unsupported burst types (e.g., WRAP), result in `DECERR`.
+
+| Variant (`decode_kind`) | Treated as DECERR (summary) |
+|-------------------------|-----------------------------|
+| **SIMPLE** | Any burst (`len > 0`), or `axsize` not matching data width. |
+| **BURST** | Wrong `axsize`, unsupported burst type (e.g. WRAP), or **INCR** burst that crosses the `apb_sel_bit` boundary. |
+
+```mermaid
+flowchart TD
+  T[AXI txn fields] --> F{decode_kind?}
+  F -->|SIMPLE| S[len sz checks]
+  F -->|BURST| B[len sz burst boundary checks]
+  S --> D[DECERR yes/no]
+  B --> D
+```
 
 ### Shadow RAM
-The shadow RAM is implemented as an associative array: `logic [63:0] slv_shadow[int unsigned]`.
-- The key is generated using `ram_key_of(port_ix, paddr)`.
-- Writes are committed when a successful APB write completion is observed.
-- Reads are checked against the shadow RAM at the APB level (when observed by the monitor) and at the AXI level (when the full transaction completes).
 
-## Debugging Mismatches
+| Aspect | Detail |
+|--------|--------|
+| Storage | `logic [63:0] slv_shadow[int unsigned]` (associative array) |
+| Key | `ram_key_of(port_ix, paddr)` |
+| Write commit | On successful APB write completion observed by monitor |
+| Read check | APB beat and full AXI `RDATA` vs shadow content |
+
+## Debugging mismatches
+
+| Symptom | First checks |
+|---------|----------------|
+| Address / port mismatch | `apb_sel_bit` agreement between TB `env_cfg`, DUT tie-offs, and stimulus addresses. |
+| Data mismatch | Ordering: outstanding `pred_wr` / `buf_wr_obs` in `report_phase`; `UVM_HIGH` for predicted vs observed beats. |
+| Spurious DECERR | `decode_kind` vs DUT variant (simple vs burst RTL). |
 
 When the scoreboard reports a mismatch:
 1.  **Check the logs for `UVM_ERROR`** messages from the scoreboard. They usually indicate whether it was an address, data, or metadata (port/pwrite) mismatch.

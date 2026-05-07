@@ -106,8 +106,3 @@ package bridge_uvm_env_pkg;
 endpackage
 
 `endif
-"
-
-endpackage
-
-`endif

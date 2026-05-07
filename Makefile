@@ -40,6 +40,10 @@ PANDOC_PDF_VARS ?= -V geometry:margin=1in -V fontsize=11pt
 ALL_MD := $(shell find . -name .git -prune -o -name '*.md' -type f -print 2>/dev/null | LC_ALL=C sort)
 ALL_MD_PDF := $(ALL_MD:%.md=%.pdf)
 
+# All README.md only (same pandoc rule as %.pdf: %.md)
+ALL_README_MD := $(shell find . -name .git -prune -o -name 'README.md' -type f -print 2>/dev/null | LC_ALL=C sort)
+ALL_README_PDF := $(ALL_README_MD:%.md=%.pdf)
+
 README_PDF_DEFAULT := $(patsubst %.md,%.pdf,$(README_MD))
 
 SIMPLE_TB = test/tb_axi4_to_apb4_2x_simple.v
@@ -69,7 +73,7 @@ WAVETB ?= simple
 
 .PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv lint-uvm-sv-relaxed \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
-	lint clean sim readme-pdf md-pdfs \
+	lint clean sim readme-pdf readme-md-pdfs md-pdfs \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param
 
@@ -109,6 +113,7 @@ help:
 	@echo ""
 	@echo "  Docs:"
 	@echo "    make readme-pdf               # README.md -> README.pdf (override README_MD / README_PDF)"
+	@echo "    make readme-md-pdfs           # every README.md -> sibling README.pdf"
 	@echo "    make md-pdfs                  # every *.md under . (except .git) -> sibling .pdf"
 	@echo "    PANDOC_PDF_ENGINE=xelatex     # optional, for richer Unicode/fonts"
 	@echo ""
@@ -276,6 +281,8 @@ gtk:
 	$(PANDOC) $(PANDOC_PDF_VARS) --resource-path=$(dir $(abspath $<)):$(CURDIR) --pdf-engine=$(PANDOC_PDF_ENGINE) $< -o $@
 
 md-pdfs: $(ALL_MD_PDF)
+
+readme-md-pdfs: $(ALL_README_PDF)
 
 readme-pdf: $(README_PDF)
 
