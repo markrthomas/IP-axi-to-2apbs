@@ -1,0 +1,10 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1778361126" />
+    <testcase name="test_apb0_write_read" classname="test_simple_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_simple_bridge.py" lineno="17" time="0.00837397575378418" sim_time_ns="150.001" ratio_time="17912.757859636138" />
+    <testcase name="test_apb1_write_read" classname="test_simple_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_simple_bridge.py" lineno="37" time="0.003424406051635742" sim_time_ns="160.001" ratio_time="46723.723059527954" />
+    <testcase name="test_address_decode" classname="test_simple_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_simple_bridge.py" lineno="57" time="0.0053136348724365234" sim_time_ns="270.00100000000003" ratio_time="50812.862848476696" />
+    <testcase name="test_multiple_writes" classname="test_simple_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_simple_bridge.py" lineno="81" time="0.01040959358215332" sim_time_ns="490.00099999999986" ratio_time="47072.05868633333" />
+    <testcase name="test_wait_state" classname="test_simple_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_simple_bridge.py" lineno="107" time="0.004575252532958984" sim_time_ns="220.0010000000002" ratio_time="48084.99605544559" />
+  </testsuite>
+</testsuites>

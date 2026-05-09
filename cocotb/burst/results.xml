@@ -1,0 +1,11 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1778361136" />
+    <testcase name="test_single_write_read_apb0" classname="test_burst_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_burst_bridge.py" lineno="19" time="0.006098270416259766" sim_time_ns="170.001" ratio_time="27876.920568613652" />
+    <testcase name="test_single_write_read_apb1" classname="test_burst_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_burst_bridge.py" lineno="39" time="0.0035016536712646484" sim_time_ns="180.001" ratio_time="51404.569640089874" />
+    <testcase name="test_burst_write_read_apb0" classname="test_burst_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_burst_bridge.py" lineno="59" time="0.009170293807983398" sim_time_ns="450.00100000000003" ratio_time="49071.60113106103" />
+    <testcase name="test_burst_write_read_apb1" classname="test_burst_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_burst_bridge.py" lineno="85" time="0.008832216262817383" sim_time_ns="450.00099999999986" ratio_time="50949.95260639761" />
+    <testcase name="test_boundary_crossing_decerr" classname="test_burst_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_burst_bridge.py" lineno="110" time="0.0022242069244384766" sim_time_ns="110.0010000000002" ratio_time="49456.27980533829" />
+    <testcase name="test_alternating_slaves" classname="test_burst_bridge" file="/home/markt/proj/IP-axi-to-2apbs/cocotb/test_burst_bridge.py" lineno="137" time="0.010858535766601562" sim_time_ns="540.001" ratio_time="49730.55406428948" />
+  </testsuite>
+</testsuites>

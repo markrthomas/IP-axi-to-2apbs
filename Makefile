@@ -76,7 +76,7 @@ WAVETB ?= simple
 	lint clean sim readme-pdf readme-md-pdfs md-pdfs \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
-	regress coverage formal ci _lint_iverilog _lint_verilator
+	regress coverage formal ci cocotb _lint_iverilog _lint_verilator
 
 default: help
 
@@ -329,8 +329,13 @@ formal:
 	@echo "[FORMAL] No SymbiYosys .sby files yet for this repo."
 	@echo "         See doc/PLAN.md and DV_STANDARDS.md in the workspace root."
 
-# ci: comprehensive local run — regress + coverage check + UVM mirror.
-ci: regress coverage check-uvm-mirror
+# cocotb: Python-based OSS UVM-equivalent tests (Icarus + cocotb).
+#         Requires: pip install cocotb  (no VCS needed).
+cocotb:
+	$(MAKE) -C $(CURDIR)/cocotb
+
+# ci: comprehensive local run — regress + coverage check + UVM mirror + cocotb.
+ci: regress coverage check-uvm-mirror cocotb
 	@echo "[CI] All gates passed."
 
 .PHONY: regress coverage formal ci _lint_iverilog _lint_verilator

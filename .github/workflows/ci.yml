@@ -28,3 +28,18 @@ jobs:
 
       - name: UVM literal mirror check (no VCS required)
         run: make check-uvm-mirror
+
+  cocotb:
+    needs: regress
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+          pip install cocotb
+
+      - name: cocotb OSS UVM-equivalent tests (simple + burst)
+        run: make cocotb
