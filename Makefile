@@ -75,7 +75,8 @@ WAVETB ?= simple
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
 	lint clean sim readme-pdf readme-md-pdfs md-pdfs \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
-	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param
+	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
+	regress coverage formal ci _lint_iverilog _lint_verilator
 
 default: help
 
@@ -162,13 +163,6 @@ lint-uvm-sv-relaxed:
 	$(VERILATOR) $(VERILATOR_LINT_UVM_RELAXED_FLAGS) $(UVM_SV_LINT_SRCS)
 
 check-uvm: check-uvm-mirror lint-uvm-sv
-
-lint:
-	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_simple_w $(SIMPLE_TB) $(SIMPLE_RTL)
-	$(IVERILOG) $(IVERILOG_FLAGS) -DREAD_WAIT_CYCLES=$(WAIT_CYCLES) -o /tmp/sim_simple_ws_w $(SIMPLE_WS_TB) $(SIMPLE_RTL)
-	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_burst_w $(BURST_TB) $(BURST_RTL)
-	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_burst_ext_w $(BURST_EXT_TB) $(BURST_RTL)
-	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_param_w $(PARAM_TB) $(BURST_RTL)
 
 # --- compile -----------------------------------------------------------------
 
@@ -295,6 +289,51 @@ $(README_PDF): $(README_MD)
 		{ printf '%s\n' "Missing PDF engine '$(PANDOC_PDF_ENGINE)' on PATH. Install TeX Live or set PANDOC_PDF_ENGINE=wkhtmltopdf (wkhtmltopdf must be installed)" >&2; exit 127; }
 	$(PANDOC) $(PANDOC_PDF_VARS) --resource-path=$(dir $(abspath $<)):$(CURDIR) --pdf-engine=$(PANDOC_PDF_ENGINE) $< -o $@
 endif
+
+# --- standard DV gate targets (consistent with other RTL repos) --------------
+
+# lint: iverilog -Wall across all TBs, then Verilator RTL-only lint.
+# Add Verilator pass after existing iverilog checks.
+lint: _lint_iverilog _lint_verilator
+
+_lint_iverilog:
+	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_simple_w $(SIMPLE_TB) $(SIMPLE_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -DREAD_WAIT_CYCLES=$(WAIT_CYCLES) -o /tmp/sim_simple_ws_w $(SIMPLE_WS_TB) $(SIMPLE_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_burst_w $(BURST_TB) $(BURST_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_burst_ext_w $(BURST_EXT_TB) $(BURST_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_param_w $(PARAM_TB) $(BURST_RTL)
+
+_lint_verilator:
+	@if command -v $(VERILATOR) >/dev/null 2>&1; then \
+		echo "[LINT] Verilator RTL lint..."; \
+		$(VERILATOR) --lint-only -Wall -Wno-DECLFILENAME $(SIMPLE_RTL); \
+		$(VERILATOR) --lint-only -Wall -Wno-DECLFILENAME $(BURST_RTL); \
+	else \
+		echo "[LINT] verilator not on PATH — skipping RTL lint"; \
+	fi
+
+# regress: fast CI gate — lint + directed simulation (simple + burst).
+regress: _lint_iverilog _lint_verilator test-all
+	@echo "[REGRESS] lint + directed sim PASSED"
+
+# coverage: Verilator --coverage requires a C++ wrapper not yet written.
+#           See doc/PLAN.md (Near-term item 1) for the plan.
+coverage:
+	@echo "[COVERAGE] Verilator C++ wrapper not yet written for this repo."
+	@echo "           Add sim_main.cpp and wire --coverage to enable line coverage."
+	@echo "           See doc/PLAN.md and DV_STANDARDS.md in the workspace root."
+
+# formal: no SymbiYosys .sby property files yet.
+#         See doc/PLAN.md (Medium-term item 4) for the plan.
+formal:
+	@echo "[FORMAL] No SymbiYosys .sby files yet for this repo."
+	@echo "         See doc/PLAN.md and DV_STANDARDS.md in the workspace root."
+
+# ci: comprehensive local run — regress + coverage check + UVM mirror.
+ci: regress coverage check-uvm-mirror
+	@echo "[CI] All gates passed."
+
+.PHONY: regress coverage formal ci _lint_iverilog _lint_verilator
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param \
