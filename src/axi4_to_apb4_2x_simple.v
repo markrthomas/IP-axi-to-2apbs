@@ -71,6 +71,9 @@ module axi4_to_apb4_2x_simple #(
     input  wire                      PSLVERR1
 );
 
+    // Single-beat only: burst type and WLAST are don't-cares (AWLEN/ARLEN != 0 is rejected above).
+    wire _unused_ok = &{1'b0, S_AXI_AWBURST, S_AXI_WLAST, S_AXI_ARBURST};
+
     localparam EXPECTED_AXSIZE = (DATA_WIDTH == 1024) ? 3'b111 :
                                  (DATA_WIDTH == 512)  ? 3'b110 :
                                  (DATA_WIDTH == 256)  ? 3'b101 :
