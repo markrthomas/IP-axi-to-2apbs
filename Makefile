@@ -4,6 +4,14 @@ GTKWAVE ?= gtkwave
 GTKWAVE_FLAGS ?=
 VERILATOR ?= verilator
 
+VERILATOR_ROOT := $(shell v=$$(command -v verilator 2>/dev/null); [ -n "$$v" ] && realpath "$$(dirname "$$v")/../share/verilator")
+VERILATOR_INC  := $(VERILATOR_ROOT)/include
+VERILATOR_CPP  := $(VERILATOR_INC)/verilated.cpp $(VERILATOR_INC)/verilated_cov.cpp \
+                  $(VERILATOR_INC)/verilated_threads.cpp
+
+COV_DIR_SIMPLE := obj_dir_cov_simple
+COV_DIR_BURST  := obj_dir_cov_burst
+
 UVM_SV_LINT_SRCS = \
 	uvm/sv/interfaces/axi4_master_if.sv \
 	uvm/sv/interfaces/apb_burst_ext_side_if.sv \
@@ -316,18 +324,57 @@ _lint_verilator:
 regress: _lint_iverilog _lint_verilator test-all
 	@echo "[REGRESS] lint + directed sim PASSED"
 
-# coverage: Verilator --coverage requires a C++ wrapper not yet written.
-#           See doc/PLAN.md (Near-term item 1) for the plan.
-coverage:
-	@echo "[COVERAGE] Verilator C++ wrapper not yet written for this repo."
-	@echo "           Add sim_main.cpp and wire --coverage to enable line coverage."
-	@echo "           See doc/PLAN.md and DV_STANDARDS.md in the workspace root."
+# coverage: Verilator --coverage for both bridge variants; emits coverage_simple.info + coverage_burst.info.
+coverage: _cov_simple _cov_burst
+	@echo "[COVERAGE] Done. Wrote coverage_simple.info and coverage_burst.info."
 
-# formal: no SymbiYosys .sby property files yet.
-#         See doc/PLAN.md (Medium-term item 4) for the plan.
+_cov_simple:
+	@command -v $(VERILATOR) >/dev/null 2>&1 || { echo "[COVERAGE] verilator not on PATH; skipping"; exit 0; }
+	rm -rf $(COV_DIR_SIMPLE)
+	$(VERILATOR) --coverage -cc $(SIMPLE_RTL) --top-module axi4_to_apb4_2x_simple \
+		--Mdir $(COV_DIR_SIMPLE) -Wno-DECLFILENAME -Wall -Wno-fatal
+	$(MAKE) -C $(COV_DIR_SIMPLE) -f Vaxi4_to_apb4_2x_simple.mk
+	g++ -DVM_COVERAGE=1 -o $(COV_DIR_SIMPLE)/sim_simple \
+		sim_main_simple.cpp $(COV_DIR_SIMPLE)/Vaxi4_to_apb4_2x_simple__ALL.a \
+		-I$(COV_DIR_SIMPLE) -I$(VERILATOR_INC) -I$(VERILATOR_INC)/vltstd \
+		$(VERILATOR_CPP) -pthread -lm
+	cd $(COV_DIR_SIMPLE) && ./sim_simple
+	@if command -v verilator_coverage >/dev/null 2>&1; then \
+		verilator_coverage --write-info ../coverage_simple.info $(COV_DIR_SIMPLE)/coverage.dat; \
+		echo "[COVERAGE] simple: coverage_simple.info written"; \
+	else \
+		echo "[COVERAGE] simple: coverage.dat in $(COV_DIR_SIMPLE) (install verilator for lcov export)"; \
+	fi
+
+_cov_burst:
+	@command -v $(VERILATOR) >/dev/null 2>&1 || { echo "[COVERAGE] verilator not on PATH; skipping"; exit 0; }
+	rm -rf $(COV_DIR_BURST)
+	$(VERILATOR) --coverage -cc $(BURST_RTL) --top-module axi4_to_apb4_2x_burst \
+		--Mdir $(COV_DIR_BURST) -Wno-DECLFILENAME -Wall -Wno-fatal
+	$(MAKE) -C $(COV_DIR_BURST) -f Vaxi4_to_apb4_2x_burst.mk
+	g++ -DVM_COVERAGE=1 -o $(COV_DIR_BURST)/sim_burst \
+		sim_main_burst.cpp $(COV_DIR_BURST)/Vaxi4_to_apb4_2x_burst__ALL.a \
+		-I$(COV_DIR_BURST) -I$(VERILATOR_INC) -I$(VERILATOR_INC)/vltstd \
+		$(VERILATOR_CPP) -pthread -lm
+	cd $(COV_DIR_BURST) && ./sim_burst
+	@if command -v verilator_coverage >/dev/null 2>&1; then \
+		verilator_coverage --write-info ../coverage_burst.info $(COV_DIR_BURST)/coverage.dat; \
+		echo "[COVERAGE] burst: coverage_burst.info written"; \
+	else \
+		echo "[COVERAGE] burst: coverage.dat in $(COV_DIR_BURST) (install verilator for lcov export)"; \
+	fi
+
+# formal: SymbiYosys formal proofs in verification/formal/.
+#         Checks APB4 handshake timing, mutual exclusion, and BVALID/RVALID
+#         cleanup for the simple bridge variant.
 formal:
-	@echo "[FORMAL] No SymbiYosys .sby files yet for this repo."
-	@echo "         See doc/PLAN.md and DV_STANDARDS.md in the workspace root."
+	@if command -v sby >/dev/null 2>&1; then \
+		$(MAKE) -C $(CURDIR)/verification/formal; \
+	else \
+		echo "[FORMAL] sby not found; install SymbiYosys (OSS CAD Suite) to run formal"; \
+		echo "         Properties are in verification/formal/apb4_simple_props.sv"; \
+		exit 0; \
+	fi
 
 # cocotb: Python-based OSS UVM-equivalent tests (Icarus + cocotb).
 #         Requires: pip install cocotb  (no VCS needed).
@@ -338,8 +385,11 @@ cocotb:
 ci: regress coverage check-uvm-mirror cocotb
 	@echo "[CI] All gates passed."
 
-.PHONY: regress coverage formal ci _lint_iverilog _lint_verilator
+.PHONY: regress coverage _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param \
-		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF)
+		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
+		coverage_simple.info coverage_burst.info
+	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST)
+	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true

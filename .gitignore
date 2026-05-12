@@ -1,5 +1,9 @@
 sim_simple
 sim_burst
+obj_dir_cov_simple/
+obj_dir_cov_burst/
+coverage_simple.info
+coverage_burst.info
 sim_burst_ext
 sim_simple_ws_*
 sim_param

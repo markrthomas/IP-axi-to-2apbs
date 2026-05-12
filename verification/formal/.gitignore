@@ -1,0 +1,4 @@
+# SymbiYosys build output directories
+apb4_simple/
+apb4_simple_bmc/
+apb4_simple_cover/

@@ -1,0 +1,33 @@
+# apb4_simple.sby — SymbiYosys formal proof for axi4_to_apb4_2x_simple
+#
+# Tasks:
+#   bmc   — safety: APB handshake timing, mutual exclusion, BVALID/RVALID cleanup
+#   cover — reachability: write and read transactions complete
+#
+# Run all: sby -f apb4_simple.sby
+# One task: sby -f apb4_simple.sby bmc
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+cover: mode cover
+depth 30
+
+[engines]
+smtbmc
+
+[script]
+read -sv apb4_simple_props.sv axi4_to_apb4_2x_simple.v
+hierarchy -top apb4_simple_props
+proc
+opt
+memory_map
+flatten
+opt
+
+[files]
+apb4_simple_props.sv
+../../src/axi4_to_apb4_2x_simple.v
