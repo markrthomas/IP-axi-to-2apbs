@@ -24,4 +24,4 @@ flowchart TB
 
 Concrete `configure_env()` overrides set `decode_kind`, `apb_sel_bit`, etc. per test class in `bridge_uvm_tests_pkg.sv`.
 
-Parent: [`../README.md`](../README.md) · VCS: [`../vcs/README.md`](../vcs/README.md).
+Parent: [`../README.md`](../README.md) · VCS: [`../vcs/README.md`](../vcs/README.md) · Xcelium: [`../xcelium/README.md`](../xcelium/README.md).

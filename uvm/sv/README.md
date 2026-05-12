@@ -16,7 +16,10 @@ Passive monitors observe the DUT; the scoreboard predicts APB beats from AXI and
 
 ## How pieces compile
 
-VCS builds from `uvm/vcs/Makefile`, which adds include directories for `pkg`, `env`, `monitors`, `scoreboard`, and `transactions` so `` `include "bridge_axi_monitor.sv" `` in the env package resolves. See [`../vcs/README.md`](../vcs/README.md).
+Both VCS and Xcelium builds add `+incdir+` paths for `pkg`, `env`, `monitors`, `scoreboard`, `transactions`, and `interfaces` so `` `include "bridge_axi_monitor.sv" `` in the env package resolves without relative paths.
+
+- VCS: [`../vcs/Makefile`](../vcs/README.md) — `vcs` compile then `./simv` run
+- Xcelium: [`../xcelium/Makefile`](../xcelium/README.md) — `xrun` unified compile+run with `-uvmhome`
 
 ## Layer diagram
 

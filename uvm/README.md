@@ -21,11 +21,13 @@ flowchart LR
     IVER[Icarus test/]
   end
   subgraph uvm [UVM flow]
-    UVM[uvm/ VCS]
+    VCS[uvm/ VCS]
+    XCE[uvm/ Xcelium]
   end
   RTL[src/ RTL]
   IVER --> RTL
-  UVM --> RTL
+  VCS --> RTL
+  XCE --> RTL
 ```
 
 Both flows hit the same DUT sources under `src/`; UVM adds monitors, TLM, and a predictive scoreboard. Stimulus helpers intentionally mirror the Icarus benches—see `scripts/uvm_mirror_check.py` (`make check-uvm-mirror` from the repo root).
@@ -109,6 +111,7 @@ flowchart LR
 | [`sv/models/`](sv/models/README.md) | APB behavioral memories. |
 | [`tb/`](tb/README.md) | Top modules and `run_test(...)` wiring. |
 | [`vcs/`](vcs/README.md) | Makefile and file lists for Synopsys VCS. |
+| [`xcelium/`](xcelium/README.md) | Makefile and file lists for Cadence Xcelium. |
 | [`lint/`](lint/README.md) | Verilator lint shims. |
 
 ### Package hierarchy
@@ -188,19 +191,37 @@ The environment uses various APB memory models to simulate the slave devices:
 
 ## Build & Run
 
-Set `UVM_HOME` so `$UVM_HOME/src/uvm.sv` exists. From `uvm/vcs/`:
+Set `UVM_HOME` so `$UVM_HOME/src/uvm.sv` exists, then `cd` into the simulator subdirectory.
+
+### Synopsys VCS (`uvm/vcs/`)
 
 ```bash
 export UVM_HOME=/path/to/uvm
+cd uvm/vcs
 make sim_simple
 ```
 
-### Makefile Targets
-- `sim_simple`: Runs `test_bridge_simple`.
-- `sim_burst`: Runs `test_bridge_burst`.
-- `sim_burst_ext`: Runs `test_bridge_burst_ext`.
-- `sim_simple_ws`: Runs `test_bridge_simple_ws` (supports `READ_WS` parameter).
-- `sim_parameterized`: Runs `test_bridge_parameterized_cfg`.
+See [`vcs/README.md`](vcs/README.md) for full flag and artifact details.
+
+### Cadence Xcelium (`uvm/xcelium/`)
+
+```bash
+export UVM_HOME=/path/to/uvm
+cd uvm/xcelium
+make sim_simple
+```
+
+`xrun` compiles and simulates in one step; output goes to `sim_simple.log`. See [`xcelium/README.md`](xcelium/README.md) for full flag and artifact details.
+
+### Makefile targets (both simulators)
+
+| Target | Test class | Notes |
+|--------|-----------|-------|
+| `sim_simple` | `test_bridge_simple` | |
+| `sim_burst` | `test_bridge_burst` | |
+| `sim_burst_ext` | `test_bridge_burst_ext` | |
+| `sim_simple_ws` | `test_bridge_simple_ws` | accepts `READ_WS=N` (default 2) |
+| `sim_parameterized` | `test_bridge_parameterized_cfg` | |
 
 ### Mirror Validation
 To ensure the UVM environment stays in sync with the RTL reference testbenches:
