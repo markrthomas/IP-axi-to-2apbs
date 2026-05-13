@@ -12,6 +12,7 @@ contrived.
 - The structure of a UVM environment: interfaces, monitors, scoreboard, test.
 - How to read xrun output, correlate it to UVM phases, and interpret pass/fail.
 - How to capture waveforms and debug mismatches.
+- How to write TCL scripts for batch waveform capture, event-driven breakpoints, and signal forcing.
 - How to add your own test class and stimulus task.
 
 **Prerequisites**
@@ -443,24 +444,224 @@ simvision waves_simple.shm &
 SimVision provides schematic trace, transaction annotation, and is tightly
 integrated with Xcelium's debug database.
 
-### 8.3 Adding probes via TCL input script
+### 8.3 TCL scripting in Xcelium
 
-For finer control, put probe commands in a TCL file:
+Xcelium embeds a full TCL interpreter.  Every interactive command you type at
+the `xcelium>` prompt is a TCL statement, and every batch script passed with
+`-input` is evaluated the same way.  The simulation-control commands (`run`,
+`stop`, `value`, `force`, `probe`) are built-in TCL procedures — you can call
+them from loops, conditionals, and your own procs exactly as you would any
+other TCL code.
 
-```tcl
-# file: probe_simple.tcl
-probe -create tb_uvm_simple -depth all -shm -name probe_simple
-run
-```
+**Two modes of use**
 
-Then:
+| Mode | How to invoke | Use for |
+|------|---------------|---------|
+| Batch (`-input script.tcl`) | `xrun ... -input script.tcl` | Automated runs: probe setup, fixed injection, result extraction. |
+| Interactive (`xcelium>` prompt) | `xrun ...` (no `-input`); type at prompt | Exploratory debug: advance time, read signals, set breakpoints live. |
+| Source inside interactive | `xcelium> source tcl/hier_inspect.tcl` | Load helper procs into a live session. |
+
+**Provided example scripts** (`uvm/xcelium/tcl/`)
+
+| Script | Mode | What it does |
+|--------|------|--------------|
+| `probe_bridge.tcl` | Batch | Opens an SHM or VCD database, probes the full TB hierarchy, runs to UVM completion. |
+| `debug_axi.tcl` | Batch | Registers eight event-driven breakpoints on AXI and APB handshake edges; prints channel state at each event. |
+| `force_signals.tcl` | Batch | Waits for reset, then force-drives `PREADY0` low to inject extra APB stall cycles beyond the slave model. |
+| `hier_inspect.tcl` | Interactive | Defines helper procs: `bridge_status`, `axi_snapshot`, `apb_snapshot`, `dump_slv_mem`, `watch_signal`. |
+
+### 8.4 Waveform capture: `probe_bridge.tcl`
 
 ```bash
-xrun  ...  -input probe_simple.tcl  -top tb_uvm_simple
+cd uvm/xcelium
+xrun $(cat <(make -n sim_simple | grep xrun | head -1)) \
+     -input tcl/probe_bridge.tcl
+# or inline:
+xrun $XRUN_FLAGS $UVM_ARGS $IFDIR [source files] \
+     -top tb_uvm_simple -log sim_simple.log \
+     -input tcl/probe_bridge.tcl
 ```
 
-This is useful when you want to probe only specific hierarchical scopes or
-use conditional triggers.
+Key lines from the script:
+
+```tcl
+# Open a waveform database (shm = SimVision native; vcd = open format)
+database -open -shm wave_db -into waves_bridge.shm -default
+
+# Probe the full hierarchy at all depths
+probe -create tb_uvm_simple -depth all -database wave_db
+
+# Run to UVM completion (drop_objection ends run_phase)
+run
+
+exit
+```
+
+The `set WAVE_FMT shm` line at the top of the script switches between SHM and
+VCD output.  Change `set PROBE_SCOPE tb_uvm_simple` to a narrower path such
+as `tb_uvm_simple.dut` to reduce dump size on large runs.
+
+Open the result:
+
+```bash
+simvision waves_bridge.shm &   # Cadence SimVision
+gtkwave   waves_bridge.vcd  &  # open-source (after set WAVE_FMT vcd)
+```
+
+### 8.5 Event-driven breakpoints: `debug_axi.tcl`
+
+`debug_axi.tcl` registers `stop` commands on rising edges of handshake
+signals.  Each fires a TCL callback that prints signal state then immediately
+resumes with `run`.
+
+```tcl
+# Fire when AWREADY rises while AWVALID is already high
+stop -name aw_accept \
+     -signal  tb_uvm_simple.axi_if.S_AXI_AWREADY \
+     -posedge \
+     -command {
+         if {[value -radix unsigned ...S_AXI_AWVALID] == 1} {
+             on_aw_accepted
+         }
+         run
+     }
+```
+
+The `-command` body is arbitrary TCL; the guard checks that both VALID and
+READY are high before printing, avoiding false triggers.
+
+Running the script against `sim_simple` produces:
+
+```
+[105 ns] AXI AW accepted:
+  AWADDR=0x00000010  AWLEN=0  AWSIZE=3  AWBURST=1(INCR)
+[115 ns] APB0 setup phase:
+  PADDR=0x00000010  PWRITE=1  PWDATA=0xdeadbeefcafebabe
+[120 ns] APB0 completed: PSLVERR=0
+[125 ns] AXI B response: BRESP=0(OKAY)
+...
+```
+
+The eight active breakpoints cover: AW accepted, W beat, APB0 setup, APB0
+complete, APB1 setup, APB1 complete, B response, R beat.  Remove or add
+`stop` blocks to focus on the signals relevant to your debug.
+
+**Key `stop` options**
+
+| Option | Meaning |
+|--------|---------|
+| `-signal path` | Signal to watch. |
+| `-posedge` / `-negedge` | Edge direction. |
+| `-time N` | Fire at simulation time N (ns by default). |
+| `-once` | Disarm after first firing. |
+| `-name id` | Assign a name so you can `stop -delete id` later. |
+| `-command {tcl}` | TCL to execute when the breakpoint fires. |
+
+### 8.6 Force and release: `force_signals.tcl`
+
+`force` overrides a signal's driver for as long as the force is active;
+`release` hands control back to the RTL driver.  This is the TCL equivalent
+of `$force`/`$release` in SystemVerilog.
+
+```tcl
+# Override PREADY0 to inject 3 extra stall cycles
+force -deposit tb_uvm_simple_ws.PREADY0 1'b0
+run 30 ns
+release tb_uvm_simple_ws.PREADY0
+```
+
+`force_signals.tcl` chains this with a reset-edge breakpoint so the force
+only fires when the DUT is active:
+
+```tcl
+stop -name rst_done \
+     -signal  tb_uvm_simple_ws.rst_n \
+     -posedge -once \
+     -command { on_reset_done; run }
+```
+
+Inside `on_reset_done`, a one-shot time breakpoint schedules the release:
+
+```tcl
+stop -name pready0_release \
+     -time [expr {[time_ns] + $EXTRA_STALL_NS}] \
+     -once \
+     -command { release tb_uvm_simple_ws.PREADY0; run }
+```
+
+**`force` options**
+
+| Option | Effect |
+|--------|--------|
+| `-deposit` | Immediate override; RTL can reclaim after the force period. |
+| (no flag) | Hard force; RTL cannot override while active. |
+| `-after N ns` | Delayed force (applies N ns after the `force` call). |
+
+**Signals that can be forced**
+
+Only signals driven as `logic` (not `wire`) from a non-DUT source can be
+force-released without conflicts.  In the `tb_uvm_simple_ws` testbench,
+`PREADY0` and `PREADY1` are declared `logic` and driven by the slave model —
+safe to force.  DUT output wires (`PSEL0`, `PADDR0`, etc.) should not be
+forced because the RTL driver will fight the force.
+
+### 8.7 Hierarchy inspection: `hier_inspect.tcl` (interactive)
+
+Load this in an interactive session:
+
+```bash
+# Start xrun without -input to get the interactive prompt
+xrun $XRUN_FLAGS $UVM_ARGS $IFDIR [files] -top tb_uvm_simple
+# xcelium> prompt appears
+xcelium> source uvm/xcelium/tcl/hier_inspect.tcl
+xcelium> run 200         ;# advance 200 ns past reset
+xcelium> bridge_status   ;# print AXI + APB snapshot
+xcelium> dump_slv_mem    ;# show first 8 words of APB slave RAM
+xcelium> run 50
+xcelium> axi_snapshot
+```
+
+Sample `bridge_status` output:
+
+```
+=== AXI snapshot @ 210 ns ===
+  AW: VALID=0 READY=1  ADDR=0x00000000 LEN=0   BURST=0
+  W : VALID=0 READY=1  DATA=0x0000000000000000 STRB=0x00 LAST=0
+  B : VALID=0 READY=0  RESP=0
+  AR: VALID=0 READY=1  ADDR=0x00000000 LEN=0   BURST=0
+  R : VALID=0 READY=0  DATA=0x0000000000000000 RESP=0 LAST=0
+
+=== APB snapshot @ 210 ns ===
+  Port  PSEL PENABLE PWRITE PREADY PSLVERR  PADDR         PWDATA/PRDATA
+  APB0  0    0       0      1      0        0x00000000     R:0x0000000000000000
+  APB1  0    0       0      1      0        0x00000000     R:0x0000000000000000
+```
+
+`watch_signal` is useful for catching infrequent events without cluttering
+the output with a `stop` on every edge:
+
+```tcl
+xcelium> watch_signal tb_uvm_simple.PSEL0 10 200
+# Prints only when PSEL0 changes value; polls every 10 ns for 200 polls
+```
+
+### 8.8 Core TCL command reference
+
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| `run` | `run [N ns\|us\|ps]` | Advance simulation; no arg runs to end/next stop. |
+| `stop` | `stop -signal path -posedge/-negedge [-once] [-command {tcl}]` | Register an event breakpoint. |
+| `stop` | `stop -time N [-once] [-command {tcl}]` | Time-based breakpoint. |
+| `stop -delete` | `stop -delete name` | Remove a named breakpoint. |
+| `value` | `value [-radix hex\|bin\|unsigned\|dec] path` | Read current signal value. |
+| `force` | `force [-deposit] path val [-after N ns]` | Drive a signal. |
+| `release` | `release path` | Return signal to RTL driver. |
+| `probe` | `probe -create scope -depth N [-database db]` | Add waveform probe. |
+| `database` | `database -open -shm\|-vcd name -into file` | Open waveform file. |
+| `describe` | `describe scope` | List children of a hierarchy scope. |
+| `find signals` | `find signals -r {scope.glob}` | Search signals by glob. |
+| `time` | `time` | Return current simulation time as a string. |
+| `exit` | `exit` | End the simulation and quit xrun. |
 
 ---
 
@@ -762,6 +963,10 @@ If you will work on both tool flows, keep this table handy:
 | Understand the bridge protocol | [`doc/design_contract.md`](design_contract.md) |
 | Navigate UVM component code | [`uvm/README.md`](../uvm/README.md) and per-directory READMEs |
 | Extend tests or debug scoreboard mismatches | [`uvm/GEMINI.md`](../uvm/GEMINI.md) |
+| Capture waveforms automatically | `uvm/xcelium/tcl/probe_bridge.tcl` — edit `WAVE_FMT` and `PROBE_SCOPE` |
+| Debug with event-driven breakpoints | `uvm/xcelium/tcl/debug_axi.tcl` — add or remove `stop` blocks for your signals |
+| Inject back-pressure or errors via TCL | `uvm/xcelium/tcl/force_signals.tcl` — adapt for your signal and timing |
+| Explore hierarchy interactively | Source `uvm/xcelium/tcl/hier_inspect.tcl` at the `xcelium>` prompt |
 | Add constrained-random stimulus | `bridge_stimulus_pkg.sv` — convert tasks to `uvm_sequence` items |
 | Add functional coverage | Add `covergroup` inside monitors or a new coverage collector component |
 | Formal property checking | `verification/formal/` (SymbiYosys) — see `make formal` from root |
