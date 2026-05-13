@@ -11,7 +11,9 @@ IFDIR     = +incdir+$(abspath ../sv/interfaces) \
             +incdir+$(abspath ../sv/env) \
             +incdir+$(abspath ../sv/monitors) \
             +incdir+$(abspath ../sv/scoreboard) \
-            +incdir+$(abspath ../sv/transactions)
+            +incdir+$(abspath ../sv/transactions) \
+            +incdir+$(abspath ../sv/cov) \
+            +incdir+$(abspath ../sv/seq)
 RTL       = $(abspath ../../src)
 
 READ_WS ?= 2

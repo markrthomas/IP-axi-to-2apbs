@@ -115,7 +115,8 @@ class AXI4Driver:
                 return rdata, rresp
         raise AssertionError(f"Timeout waiting for RVALID (addr=0x{addr:08x})")
 
-    async def burst_write(self, addr, data_list, awid=0, strb=0xFF):
+    async def burst_write(self, addr, data_list, awid=0, strb=0xFF, burst_type=0b01):
+        """Drive a multi-beat AXI write.  burst_type: 0=FIXED, 1=INCR (default)."""
         dut    = self.dut
         clk    = self.clk
         length = len(data_list)
@@ -124,7 +125,7 @@ class AXI4Driver:
         dut.S_AXI_AWADDR.value  = addr
         dut.S_AXI_AWLEN.value   = length - 1
         dut.S_AXI_AWSIZE.value  = 0b011
-        dut.S_AXI_AWBURST.value = 0b01
+        dut.S_AXI_AWBURST.value = burst_type
         dut.S_AXI_AWPROT.value  = 0
         dut.S_AXI_AWVALID.value = 1
         dut.S_AXI_BREADY.value  = 1
@@ -156,7 +157,8 @@ class AXI4Driver:
                 return int(dut.S_AXI_BRESP.value)
         raise AssertionError(f"Timeout waiting for BVALID (burst, addr=0x{addr:08x})")
 
-    async def burst_read(self, addr, length, arid=0):
+    async def burst_read(self, addr, length, arid=0, burst_type=0b01):
+        """Drive a multi-beat AXI read.  burst_type: 0=FIXED, 1=INCR (default)."""
         dut = self.dut
         clk = self.clk
 
@@ -164,7 +166,7 @@ class AXI4Driver:
         dut.S_AXI_ARADDR.value  = addr
         dut.S_AXI_ARLEN.value   = length - 1
         dut.S_AXI_ARSIZE.value  = 0b011
-        dut.S_AXI_ARBURST.value = 0b01
+        dut.S_AXI_ARBURST.value = burst_type
         dut.S_AXI_ARPROT.value  = 0
         dut.S_AXI_ARVALID.value = 1
         dut.S_AXI_RREADY.value  = 1
@@ -223,6 +225,7 @@ class APBSlave:
         pwrite = getattr(dut, f"PWRITE{n}")
         paddr  = getattr(dut, f"PADDR{n}")
         pwdata = getattr(dut, f"PWDATA{n}")
+        pstrb  = getattr(dut, f"PSTRB{n}")
         prdata = getattr(dut, f"PRDATA{n}")
         pready = getattr(dut, f"PREADY{n}")
 
@@ -264,7 +267,16 @@ class APBSlave:
                 else:
                     pready.value = 1
                     if write:
-                        self.mem[addr] = int(pwdata.value)
+                        strb    = int(pstrb.value)
+                        new_val = int(pwdata.value)
+                        if strb != 0xFF:
+                            old_val = self.mem.get(addr, 0)
+                            for byte_i in range(8):
+                                if not (strb >> byte_i & 1):
+                                    shift   = byte_i * 8
+                                    new_val = (new_val & ~(0xFF << shift)) | \
+                                              (old_val & (0xFF << shift))
+                        self.mem[addr] = new_val
 
     def stop(self):
         self._active = False

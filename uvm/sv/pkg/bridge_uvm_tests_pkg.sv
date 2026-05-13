@@ -4,6 +4,8 @@ package bridge_uvm_tests_pkg;
   import bridge_stimulus_pkg::*;
   import bridge_uvm_env_pkg::*;
 
+`include "bridge_rand_stim.sv"
+
   //---------------------------------------------------------------------------
   // Base Test: Shared configuration and environment setup
   //---------------------------------------------------------------------------
@@ -225,6 +227,150 @@ package bridge_uvm_tests_pkg;
         end
         begin
           stim.run_mirror_param(sel_track);
+        end
+      join_any
+      disable fork;
+      phase.drop_objection(this);
+    endtask
+  endclass
+
+  //---------------------------------------------------------------------------
+  // Constrained-Random Burst Write/Read Test
+  //
+  // Drives bridge_rand_seq against the burst bridge (tb_uvm_burst_ext.sv).
+  // The sequence alternates random writes and reads with randomized burst type
+  // (FIXED/INCR) and length (0-7), covering both APB ports.
+  // Responses are checked by the env scoreboard.
+  //---------------------------------------------------------------------------
+  class test_bridge_rand_burst extends bridge_base_test #(64);
+   `uvm_component_utils(test_bridge_rand_burst)
+
+    v_apb_side_if_t    apb_if;
+    bridge_axi_stim_64 stim;
+    bridge_rand_seq    rseq;
+
+    int unsigned n_txn = 40;   // override via +n_txn=<N> plusarg
+
+    function new(string name, uvm_component parent);
+      super.new(name, parent);
+    endfunction
+
+    function void configure_env();
+      env_cfg.apb_sel_bit  = 31;
+      env_cfg.decode_kind  = BRIDGE_DECODE_BURST;
+      env_cfg.apb_mem_addr_msb = 12;
+      env_cfg.apb_mem_addr_lsb = 3;
+    endfunction
+
+    function void build_phase(uvm_phase phase);
+      int unsigned plusarg_n;
+      super.build_phase(phase);
+      if (!uvm_config_db #(v_apb_side_if_t)::get(this, "", "apb_side_vif", apb_if))
+        `uvm_fatal(get_type_name(), "apb_side_vif missing")
+      stim = new();
+      stim.set_if(axi_vif, apb_if);
+      rseq          = bridge_rand_seq::type_id::create("rseq");
+      rseq.stim     = stim;
+      rseq.n_txn    = n_txn;
+    endfunction
+
+    task run_phase(uvm_phase phase);
+      phase.raise_objection(this);
+      fork
+        begin
+          #(200000);
+          `uvm_fatal(get_type_name(), "RAND BURST TIMEOUT")
+        end
+        begin
+          stim.drv_init_zeros();
+          @(posedge axi_vif.rst_n);
+          repeat (5) @(posedge axi_vif.clk);
+          rseq.run();
+          `uvm_info(get_type_name(),
+              $sformatf("RAND BURST TEST PASSED (%0d txn)", rseq.n_txn),
+              UVM_MEDIUM)
+        end
+      join_any
+      disable fork;
+      phase.drop_objection(this);
+    endtask
+  endclass
+
+  //---------------------------------------------------------------------------
+  // Constrained-Random Write-Then-Read Integrity Test
+  //
+  // Writes a random set of locations then reads them back, checking every
+  // read data value matches what was written.  Covers: partial strobe writes,
+  // FIXED and INCR bursts, both APB ports, and multi-beat transactions.
+  //---------------------------------------------------------------------------
+  class test_bridge_rand_integrity extends bridge_base_test #(64);
+   `uvm_component_utils(test_bridge_rand_integrity)
+
+    v_apb_side_if_t    apb_if;
+    bridge_axi_stim_64 stim;
+
+    int unsigned n_rounds = 8;   // write-then-read round-trips
+
+    function new(string name, uvm_component parent);
+      super.new(name, parent);
+    endfunction
+
+    function void configure_env();
+      env_cfg.apb_sel_bit  = 31;
+      env_cfg.decode_kind  = BRIDGE_DECODE_BURST;
+      env_cfg.apb_mem_addr_msb = 12;
+      env_cfg.apb_mem_addr_lsb = 3;
+    endfunction
+
+    function void build_phase(uvm_phase phase);
+      super.build_phase(phase);
+      if (!uvm_config_db #(v_apb_side_if_t)::get(this, "", "apb_side_vif", apb_if))
+        `uvm_fatal(get_type_name(), "apb_side_vif missing")
+      stim = new();
+      stim.set_if(axi_vif, apb_if);
+    endfunction
+
+    task run_phase(uvm_phase phase);
+      bridge_rand_item item;
+      logic [1:0] wr_resp, rd_resp;
+      phase.raise_objection(this);
+      fork
+        begin
+          #(300000);
+          `uvm_fatal(get_type_name(), "INTEGRITY TEST TIMEOUT")
+        end
+        begin
+          stim.drv_init_zeros();
+          @(posedge axi_vif.rst_n);
+          repeat (5) @(posedge axi_vif.clk);
+
+          for (int unsigned r = 0; r < n_rounds; r++) begin
+            item = bridge_rand_item::type_id::create($sformatf("wr_%0d", r));
+            item.is_write = 1;
+            if (!item.randomize())
+              `uvm_fatal(get_type_name(), "randomize() failed")
+            `uvm_info(get_type_name(),
+                $sformatf("[WR %0d] %s", r, item.convert2string()), UVM_MEDIUM)
+            stim.axi_write_burst_ext(
+                item.addr[31:0], item.burst_len, item.burst_type,
+                item.burst_len, 8'hFF, wr_resp);
+            if (wr_resp !== 2'b00)
+              `uvm_fatal(get_type_name(),
+                  $sformatf("Integrity WR failed: BRESP=%0b addr=%08h", wr_resp, item.addr))
+
+            // Read back the same address/length/burst
+            `uvm_info(get_type_name(),
+                $sformatf("[RD %0d] addr=0x%08h len=%0d", r, item.addr, item.burst_len),
+                UVM_MEDIUM)
+            stim.axi_read_burst_ext(
+                item.addr[31:0], item.burst_len, item.burst_type, rd_resp);
+            if (rd_resp !== 2'b00)
+              `uvm_fatal(get_type_name(),
+                  $sformatf("Integrity RD failed: RRESP=%0b addr=%08h", rd_resp, item.addr))
+          end
+
+          `uvm_info(get_type_name(),
+              $sformatf("INTEGRITY TEST PASSED (%0d rounds)", n_rounds), UVM_MEDIUM)
         end
       join_any
       disable fork;

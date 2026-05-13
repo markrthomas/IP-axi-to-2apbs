@@ -1,0 +1,33 @@
+# apb4_burst.sby — SymbiYosys formal proof for axi4_to_apb4_2x_burst
+#
+# Tasks:
+#   bmc   — safety: APB handshake, mutual exclusion, ID/RLAST/DECERR correctness
+#   cover — reachability: write, multi-beat write, read burst, DECERR
+#
+# Run all: sby -f apb4_burst.sby
+# One task: sby -f apb4_burst.sby bmc
+
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+cover: mode cover
+depth 30
+
+[engines]
+smtbmc
+
+[script]
+read -sv apb4_burst_props.sv axi4_to_apb4_2x_burst.v
+hierarchy -top apb4_burst_props
+proc
+opt
+memory_map
+flatten
+opt
+
+[files]
+apb4_burst_props.sv
+../../src/axi4_to_apb4_2x_burst.v

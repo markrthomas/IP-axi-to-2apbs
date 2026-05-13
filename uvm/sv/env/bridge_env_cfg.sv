@@ -13,6 +13,7 @@ class bridge_env_cfg extends uvm_object;
   int unsigned           apb_mem_addr_msb   = 9;
   int unsigned           apb_mem_addr_lsb   = 2;
   bit                    has_scoreboard     = 1;
+  bit                    has_coverage       = 1;
   bit                    enable_axi_mon     = 1;
   bit                    enable_apb_mons    = 1;
 

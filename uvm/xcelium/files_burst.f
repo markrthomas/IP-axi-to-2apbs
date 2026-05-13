@@ -7,6 +7,8 @@
 +incdir+../sv/monitors
 +incdir+../sv/scoreboard
 +incdir+../sv/transactions
++incdir+../sv/cov
++incdir+../sv/seq
 
 ../sv/interfaces/axi4_master_if.sv
 ../sv/interfaces/apb_sel_tracker_if.sv

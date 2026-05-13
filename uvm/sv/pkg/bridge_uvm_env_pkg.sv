@@ -101,6 +101,7 @@ package bridge_uvm_env_pkg;
 `include "bridge_axi_monitor.sv"
 `include "bridge_apb_monitor.sv"
 `include "bridge_scoreboard.sv"
+`include "bridge_cov_collector.sv"
 `include "bridge_env.sv"
 
 endpackage

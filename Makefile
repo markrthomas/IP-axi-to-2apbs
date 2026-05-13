@@ -415,8 +415,9 @@ _cov_burst:
 	fi
 
 # formal: SymbiYosys formal proofs in verification/formal/.
-#         Checks APB4 handshake timing, mutual exclusion, and BVALID/RVALID
-#         cleanup for the simple bridge variant.
+#         Proves APB4 handshake timing, mutual exclusion, BVALID/RVALID
+#         cleanup, BID/RID correctness, RLAST placement, and DECERR behavior
+#         for both the simple and burst bridge variants.
 formal:
 	@if command -v sby >/dev/null 2>&1; then \
 		$(MAKE) -C $(CURDIR)/verification/formal; \
