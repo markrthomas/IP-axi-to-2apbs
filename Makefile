@@ -64,6 +64,7 @@ PARAM_TB = test/tb_parameterized_config.v
 WAVE_MACROS = test/wave_macros.v
 
 WAIT_CYCLES ?= 2
+READ_WS     ?= 2
 
 # Waveform dumps (GTKWave / Surfer). FST requires vvp -fst after the sim binary.
 WAVEFMT ?= fst
@@ -84,7 +85,9 @@ WAVETB ?= simple
 	lint clean sim readme-pdf readme-md-pdfs md-pdfs \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
-	regress coverage formal ci cocotb _lint_iverilog _lint_verilator
+	regress coverage formal ci cocotb _lint_iverilog _lint_verilator \
+	uvm-vcs uvm-vcs-simple uvm-vcs-burst uvm-vcs-burst-ext uvm-vcs-simple-ws uvm-vcs-parameterized \
+	uvm-xcelium uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized
 
 default: help
 
@@ -119,6 +122,16 @@ help:
 	@echo "    make lint-uvm-sv        # strict Verilator (per-module + shims; scripts/verilator_lint_uvm_strict.sh)"
 	@echo "    make lint-uvm-sv-relaxed # single-pass multitop; many warnings waived"
 	@echo "    make check-uvm          # check-uvm-mirror + lint-uvm-sv (strict)"
+	@echo ""
+	@echo "  UVM simulation — Synopsys VCS (requires export UVM_HOME=...):"
+	@echo "    make uvm-vcs-simple | uvm-vcs-burst | uvm-vcs-burst-ext | uvm-vcs-parameterized"
+	@echo "    make uvm-vcs-simple-ws [READ_WS=N]  # default READ_WS=2"
+	@echo "    make uvm-vcs                        # all 5 VCS targets"
+	@echo ""
+	@echo "  UVM simulation — Cadence Xcelium (requires export UVM_HOME=...):"
+	@echo "    make uvm-xcelium-simple | uvm-xcelium-burst | uvm-xcelium-burst-ext | uvm-xcelium-parameterized"
+	@echo "    make uvm-xcelium-simple-ws [READ_WS=N]  # default READ_WS=2"
+	@echo "    make uvm-xcelium                        # all 5 Xcelium targets"
 	@echo ""
 	@echo "  Docs:"
 	@echo "    make readme-pdf               # README.md -> README.pdf (override README_MD / README_PDF)"
@@ -171,6 +184,43 @@ lint-uvm-sv-relaxed:
 	$(VERILATOR) $(VERILATOR_LINT_UVM_RELAXED_FLAGS) $(UVM_SV_LINT_SRCS)
 
 check-uvm: check-uvm-mirror lint-uvm-sv
+
+# --- UVM simulation (VCS + Xcelium) ------------------------------------------
+# Requires: export UVM_HOME=/path/to/uvm (must contain src/uvm.sv)
+
+uvm-vcs-simple:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_simple
+
+uvm-vcs-burst:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_burst
+
+uvm-vcs-burst-ext:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_burst_ext
+
+uvm-vcs-simple-ws:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_simple_ws READ_WS=$(READ_WS)
+
+uvm-vcs-parameterized:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_parameterized
+
+uvm-vcs: uvm-vcs-simple uvm-vcs-burst uvm-vcs-burst-ext uvm-vcs-simple-ws uvm-vcs-parameterized
+
+uvm-xcelium-simple:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_simple
+
+uvm-xcelium-burst:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_burst
+
+uvm-xcelium-burst-ext:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_burst_ext
+
+uvm-xcelium-simple-ws:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_simple_ws READ_WS=$(READ_WS)
+
+uvm-xcelium-parameterized:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_parameterized
+
+uvm-xcelium: uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized
 
 # --- compile -----------------------------------------------------------------
 
@@ -393,3 +443,5 @@ clean:
 		coverage_simple.info coverage_burst.info
 	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST)
 	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true
+	$(MAKE) -C $(CURDIR)/uvm/vcs clean 2>/dev/null || true
+	$(MAKE) -C $(CURDIR)/uvm/xcelium clean 2>/dev/null || true

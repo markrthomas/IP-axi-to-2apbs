@@ -2,6 +2,11 @@
 # Requires export UVM_HOME
 
 +incdir+../sv/interfaces
++incdir+../sv/pkg
++incdir+../sv/env
++incdir+../sv/monitors
++incdir+../sv/scoreboard
++incdir+../sv/transactions
 
 ../sv/interfaces/axi4_master_if.sv
 ../sv/interfaces/apb_sel_tracker_if.sv
