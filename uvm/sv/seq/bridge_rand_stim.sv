@@ -57,7 +57,7 @@ class bridge_rand_item extends uvm_object;
         addr = {apb_port, 15'b0, addr_page, 3'b0};
         wdata = new[burst_len + 1];
         foreach (wdata[i])
-            void'(std::randomize(wdata[i]));
+            wdata[i] = {$urandom(), $urandom()};  // avoid std::randomize portability issues
     endfunction
 
     function string convert2string();
@@ -87,24 +87,45 @@ class bridge_rand_seq extends uvm_object;
         super.new(name);
     endfunction
 
-    // Drive n_txn random transactions through stim, report each one.
+    // Drive n_txn random transactions (write phase then read phase) through stim.
+    // Two-pass ordering ensures reads always see previously-written data, so
+    // coverage of read responses is meaningful rather than returning zero.
     task run();
-        bridge_rand_item item;
+        bridge_rand_item items[];
         logic [1:0] resp;
+        int unsigned half;
         if (stim == null)
-            `uvm_fatal("RAND_SEQ", "stim handle is null; call connect() first")
+            `uvm_fatal("RAND_SEQ", "stim handle is null; connect stim before calling run()")
 
-        for (int unsigned i = 0; i < n_txn; i++) begin
-            item = bridge_rand_item::type_id::create($sformatf("item_%0d", i));
-            if (!item.randomize() with { is_write == (i % 2 == 0); })
-                `uvm_fatal("RAND_SEQ", "randomize() failed")
+        half  = n_txn / 2;
+        items = new[n_txn];
+
+        // Phase 1: randomize all items and drive writes.
+        `uvm_info("RAND_SEQ", $sformatf("Phase 1: %0d writes", half), UVM_MEDIUM)
+        for (int unsigned i = 0; i < half; i++) begin
+            items[i] = bridge_rand_item::type_id::create($sformatf("wr_%0d", i));
+            if (!items[i].randomize() with { is_write == 1'b1; })
+                `uvm_fatal("RAND_SEQ", "randomize() failed on write item")
             `uvm_info("RAND_SEQ",
-                $sformatf("[%0d/%0d] %s", i+1, n_txn, item.convert2string()),
+                $sformatf("  [W%0d] %s", i, items[i].convert2string()), UVM_MEDIUM)
+            drive_write(items[i], resp);
+        end
+
+        // Phase 2: read back the same addresses.
+        `uvm_info("RAND_SEQ", $sformatf("Phase 2: %0d reads", half), UVM_MEDIUM)
+        for (int unsigned i = 0; i < half; i++) begin
+            `uvm_info("RAND_SEQ",
+                $sformatf("  [R%0d] addr=0x%08h len=%0d", i, items[i].addr, items[i].burst_len),
                 UVM_MEDIUM)
-            if (item.is_write)
-                drive_write(item, resp);
-            else
-                drive_read(item, resp);
+            drive_read(items[i], resp);
+        end
+
+        // Phase 3: any remaining items (when n_txn is odd) as random writes.
+        for (int unsigned i = half; i < n_txn; i++) begin
+            items[i] = bridge_rand_item::type_id::create($sformatf("extra_%0d", i));
+            if (!items[i].randomize() with { is_write == 1'b1; })
+                `uvm_fatal("RAND_SEQ", "randomize() failed on extra item")
+            drive_write(items[i], resp);
         end
     endtask
 

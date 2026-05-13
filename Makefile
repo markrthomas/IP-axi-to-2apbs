@@ -87,7 +87,9 @@ WAVETB ?= simple
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
 	regress coverage formal ci cocotb _lint_iverilog _lint_verilator \
 	uvm-vcs uvm-vcs-simple uvm-vcs-burst uvm-vcs-burst-ext uvm-vcs-simple-ws uvm-vcs-parameterized \
-	uvm-xcelium uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized
+	uvm-vcs-rand-burst uvm-vcs-rand-integrity \
+	uvm-xcelium uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized \
+	uvm-xcelium-rand-burst uvm-xcelium-rand-integrity
 
 default: help
 
@@ -126,12 +128,16 @@ help:
 	@echo "  UVM simulation — Synopsys VCS (requires export UVM_HOME=...):"
 	@echo "    make uvm-vcs-simple | uvm-vcs-burst | uvm-vcs-burst-ext | uvm-vcs-parameterized"
 	@echo "    make uvm-vcs-simple-ws [READ_WS=N]  # default READ_WS=2"
-	@echo "    make uvm-vcs                        # all 5 VCS targets"
+	@echo "    make uvm-vcs-rand-burst             # constrained-random write+read sequences"
+	@echo "    make uvm-vcs-rand-integrity         # write-then-read integrity rounds"
+	@echo "    make uvm-vcs                        # all 5 directed VCS targets"
 	@echo ""
 	@echo "  UVM simulation — Cadence Xcelium (requires export UVM_HOME=...):"
 	@echo "    make uvm-xcelium-simple | uvm-xcelium-burst | uvm-xcelium-burst-ext | uvm-xcelium-parameterized"
 	@echo "    make uvm-xcelium-simple-ws [READ_WS=N]  # default READ_WS=2"
-	@echo "    make uvm-xcelium                        # all 5 Xcelium targets"
+	@echo "    make uvm-xcelium-rand-burst             # constrained-random write+read sequences"
+	@echo "    make uvm-xcelium-rand-integrity         # write-then-read integrity rounds"
+	@echo "    make uvm-xcelium                        # all 5 directed Xcelium targets"
 	@echo ""
 	@echo "  Docs:"
 	@echo "    make readme-pdf               # README.md -> README.pdf (override README_MD / README_PDF)"
@@ -203,6 +209,12 @@ uvm-vcs-simple-ws:
 uvm-vcs-parameterized:
 	$(MAKE) -C $(CURDIR)/uvm/vcs sim_parameterized
 
+uvm-vcs-rand-burst:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_rand_burst
+
+uvm-vcs-rand-integrity:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_rand_integrity
+
 uvm-vcs: uvm-vcs-simple uvm-vcs-burst uvm-vcs-burst-ext uvm-vcs-simple-ws uvm-vcs-parameterized
 
 uvm-xcelium-simple:
@@ -219,6 +231,12 @@ uvm-xcelium-simple-ws:
 
 uvm-xcelium-parameterized:
 	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_parameterized
+
+uvm-xcelium-rand-burst:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_rand_burst
+
+uvm-xcelium-rand-integrity:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_rand_integrity
 
 uvm-xcelium: uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized
 

@@ -18,7 +18,8 @@ RTL       = $(abspath ../../src)
 
 READ_WS ?= 2
 
-.PHONY: sim_simple sim_burst sim_burst_ext sim_simple_ws sim_parameterized clean
+.PHONY: sim_simple sim_burst sim_burst_ext sim_simple_ws sim_parameterized \
+        sim_rand_burst sim_rand_integrity clean
 
 sim_simple:
 	$(XRUN) $(XRUN_FLAGS) $(UVM_ARGS) $(IFDIR) \
@@ -96,6 +97,39 @@ sim_parameterized:
 	  -top tb_uvm_parameterized \
 	  -log sim_parameterized.log
 
+sim_rand_burst:
+	$(XRUN) $(XRUN_FLAGS) $(UVM_ARGS) $(IFDIR) \
+	  $(RTL)/axi4_to_apb4_2x_burst.v \
+	  ../sv/interfaces/axi4_master_if.sv \
+	  ../sv/interfaces/apb_sel_tracker_if.sv \
+	  ../sv/interfaces/apb_burst_ext_side_if.sv \
+	  ../sv/models/apb_ext_mem_dual.sv \
+	  ../sv/pkg/bridge_stimulus_pkg.sv \
+	  ../sv/interfaces/apb_mon_if.sv \
+	  ../sv/pkg/bridge_uvm_env_pkg.sv \
+	  ../sv/pkg/bridge_uvm_tests_pkg.sv \
+	  ../tb/tb_uvm_burst_ext.sv \
+	  +UVM_TESTNAME=test_bridge_rand_burst \
+	  -top tb_uvm_burst_ext \
+	  -log sim_rand_burst.log
+
+sim_rand_integrity:
+	$(XRUN) $(XRUN_FLAGS) $(UVM_ARGS) $(IFDIR) \
+	  $(RTL)/axi4_to_apb4_2x_burst.v \
+	  ../sv/interfaces/axi4_master_if.sv \
+	  ../sv/interfaces/apb_sel_tracker_if.sv \
+	  ../sv/interfaces/apb_burst_ext_side_if.sv \
+	  ../sv/models/apb_ext_mem_dual.sv \
+	  ../sv/pkg/bridge_stimulus_pkg.sv \
+	  ../sv/interfaces/apb_mon_if.sv \
+	  ../sv/pkg/bridge_uvm_env_pkg.sv \
+	  ../sv/pkg/bridge_uvm_tests_pkg.sv \
+	  ../tb/tb_uvm_burst_ext.sv \
+	  +UVM_TESTNAME=test_bridge_rand_integrity \
+	  -top tb_uvm_burst_ext \
+	  -log sim_rand_integrity.log
+
 clean:
-	rm -f sim_simple.log sim_burst.log sim_burst_ext.log sim_simple_ws.log sim_parameterized.log
+	rm -f sim_simple.log sim_burst.log sim_burst_ext.log sim_simple_ws.log \
+	      sim_parameterized.log sim_rand_burst.log sim_rand_integrity.log
 	rm -rf xcelium.d INCA_libs *.shm xrun.log *.key

@@ -182,6 +182,9 @@ module tb_uvm_burst_ext;
     )::
         set(null, "uvm_test_top.env.apb_mon1", "vif", ap_m1);
 
+    // +UVM_TESTNAME=<class> overrides the default argument on both VCS and
+    // Xcelium.  Use this testbench for: test_bridge_burst_ext (default),
+    // test_bridge_rand_burst, and test_bridge_rand_integrity.
     run_test("test_bridge_burst_ext");
   end
 

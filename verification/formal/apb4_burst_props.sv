@@ -13,9 +13,10 @@
 // the DUT's behaviour — it is only used in assume/assert/cover statements.
 //
 // Cover goals:
-//   - A single-beat write completes with OKAY
-//   - A multi-beat INCR write completes
-//   - A read completes with RLAST asserted
+//   - A single-beat write (AWLEN=0) completes with OKAY
+//   - A multi-beat write (AWLEN>0) completes with OKAY
+//   - A read burst completes: RVALID + RLAST accepted with OKAY
+//   - A DECERR write response is issued
 
 `default_nettype none
 `timescale 1ns/1ps

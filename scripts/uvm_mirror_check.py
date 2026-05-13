@@ -150,6 +150,31 @@ SUITES: tuple[Suite, ...] = (
             "test_bridge_parameterized_cfg",
         ),
     ),
+    Suite(
+        "rand_and_cov",
+        # Use burst_ext as the reference anchor (it shares the same testbench).
+        "test/tb_axi4_to_apb4_2x_burst_extended.v",
+        (
+            "uvm/sv/cov/bridge_cov_collector.sv",
+            "uvm/sv/seq/bridge_rand_stim.sv",
+            "uvm/sv/pkg/bridge_uvm_env_pkg.sv",
+            "uvm/sv/pkg/bridge_uvm_tests_pkg.sv",
+            "uvm/sv/env/bridge_env.sv",
+            "uvm/sv/env/bridge_env_cfg.sv",
+        ),
+        needles_ref=(),   # no cross-reference literals needed from the Verilog TB
+        needles_mirror_only=(
+            "bridge_cov_collector",
+            "has_coverage",
+            "cg_axi_write",
+            "cg_axi_read",
+            "cg_apb",
+            "bridge_rand_item",
+            "bridge_rand_seq",
+            "test_bridge_rand_burst",
+            "test_bridge_rand_integrity",
+        ),
+    ),
 )
 
 

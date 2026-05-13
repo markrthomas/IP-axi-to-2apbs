@@ -262,10 +262,10 @@ result is a shorter, cleaner compile line.
 
 ---
 
-## 6. All Five Test Targets
+## 6. All Test Targets
 
-The Makefile in `uvm/xcelium/` provides five targets, each testing a different
-bridge configuration.
+The Makefile in `uvm/xcelium/` provides seven targets: five directed tests and
+two constrained-random targets.
 
 ### 6.1 `sim_simple` — Single-beat AXI to APB
 
@@ -328,19 +328,52 @@ Writes to addresses with bit 20 clear (APB0) and set (APB1), verifies
 `PSEL0`/`PSEL1` assertion via `apb_sel_tracker_if`, and checks DECERR for
 64-bit AXI size on a 32-bit bridge.
 
-### 6.6 Running all five at once
+### 6.6 `sim_rand_burst` — Constrained-random write + read sequences
+
+```bash
+make sim_rand_burst
+```
+
+DUT: `axi4_to_apb4_2x_burst`.  Test class: `test_bridge_rand_burst`.
+Testbench: `tb_uvm_burst_ext.sv` (selected via `+UVM_TESTNAME`).
+
+Drives 40 random burst transactions (half writes, then the same addresses read
+back) using `bridge_rand_item` with these constraints:
+
+- Burst type: FIXED or INCR only (no WRAP).
+- Burst length: 0–7 beats.
+- Address: 8-byte aligned, safely within one APB port (no boundary crossing).
+- APB port: randomly APB0 or APB1.
+
+The functional coverage collector (`bridge_cov_collector`) samples each
+transaction.  Coverage results appear in `report_phase`.
+
+### 6.7 `sim_rand_integrity` — Write-then-read integrity rounds
+
+```bash
+make sim_rand_integrity
+```
+
+DUT: `axi4_to_apb4_2x_burst`.  Test class: `test_bridge_rand_integrity`.
+
+Performs 8 rounds of: randomize an address/burst, write it, immediately read
+it back, assert `BRESP == OKAY` and `RRESP == OKAY`.  The scoreboard validates
+APB-level data as each transaction completes.
+
+### 6.8 Running all directed targets at once
 
 ```bash
 make sim_simple sim_burst sim_burst_ext sim_simple_ws sim_parameterized
 ```
 
-Or from the **repository root** (after the top-level Makefile wiring added in
-the latest commit):
+Or from the **repository root**:
 
 ```bash
 export UVM_HOME=CDNS
-make uvm-xcelium         # runs all five
-make uvm-xcelium-simple  # one target
+make uvm-xcelium                  # all five directed targets
+make uvm-xcelium-rand-burst       # constrained-random sequences
+make uvm-xcelium-rand-integrity   # write-then-read integrity
+make uvm-xcelium-simple           # one directed target
 ```
 
 ---
@@ -967,12 +1000,9 @@ If you will work on both tool flows, keep this table handy:
 | Debug with event-driven breakpoints | `uvm/xcelium/tcl/debug_axi.tcl` — add or remove `stop` blocks for your signals |
 | Inject back-pressure or errors via TCL | `uvm/xcelium/tcl/force_signals.tcl` — adapt for your signal and timing |
 | Explore hierarchy interactively | Source `uvm/xcelium/tcl/hier_inspect.tcl` at the `xcelium>` prompt |
-| Add constrained-random stimulus | `bridge_stimulus_pkg.sv` — convert tasks to `uvm_sequence` items |
-| Add functional coverage | Add `covergroup` inside monitors or a new coverage collector component |
-| Formal property checking | `verification/formal/` (SymbiYosys) — see `make formal` from root |
+| Run constrained-random burst sequences | `make uvm-xcelium-rand-burst` — see `uvm/sv/seq/bridge_rand_stim.sv` |
+| Extend constrained-random stimulus | `bridge_rand_item` in `uvm/sv/seq/bridge_rand_stim.sv` — add constraints |
+| Read functional coverage results | `uvm/sv/cov/bridge_cov_collector.sv` — three covergroups with cross coverage |
+| Formal property checking (no simulator needed) | `verification/formal/` (SymbiYosys) — `make formal` proves both bridge variants |
+| Run OSS functional tests without Xcelium | `make cocotb` — 18 cocotb tests using Icarus Verilog |
 | Add a second DUT variant | Extend `bridge_env_cfg`, add a new `decode_kind_e` value, add RTL + tb top |
-
-The `doc/PLAN.md` lists near-term and medium-term features: constrained-random
-AXI driver, APB slave agent with wait-state randomization, functional coverage
-groups, and burst-length sweeps.  Each is a well-defined next step for
-someone comfortable with the Xcelium basics covered in this tutorial.
