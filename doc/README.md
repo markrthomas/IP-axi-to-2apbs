@@ -6,6 +6,7 @@ Current documentation entry points:
 
 | Path | Audience |
 |------|----------|
+| `xcelium_tutorial.md` | **Start here** — step-by-step Xcelium setup and UVM simulation walkthrough. |
 | `../README.md` | Repository overview and Icarus Makefile targets. |
 | `../uvm/README.md` | UVM verification map, ramp-up table, component tables. |
 | `../uvm/sv/README.md` | Per-subdirectory navigation under `uvm/sv/`. |

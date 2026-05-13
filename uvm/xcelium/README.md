@@ -9,11 +9,16 @@
 
 ```bash
 export UVM_HOME=/path/to/uvm        # must contain src/uvm.sv
+# or: export UVM_HOME=CDNS          # use Xcelium's bundled UVM
 cd uvm/xcelium
 make sim_simple
 ```
 
 `xrun` compiles and runs in one step; output goes to `sim_simple.log`.
+
+New to Xcelium?  See [`../../doc/xcelium_tutorial.md`](../../doc/xcelium_tutorial.md)
+for a step-by-step guide covering installation, `-uvmhome` options, all five
+targets, waveform capture, and how to add your own test.
 
 ## Targets
 
