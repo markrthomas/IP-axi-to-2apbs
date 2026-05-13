@@ -21,6 +21,11 @@ cocotb/**/__pycache__/
 cocotb/**/*.pyc
 cocotb/**/results.xml
 
+# SymbiYosys formal output directories
+verification/formal/*_bmc/
+verification/formal/*_cover/
+verification/formal/apb4_*/
+
 # Local notes and tooling
 NOTES
 .codex
