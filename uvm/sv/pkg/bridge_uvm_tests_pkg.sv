@@ -378,4 +378,70 @@ package bridge_uvm_tests_pkg;
     endtask
   endclass
 
+  // =========================================================================
+  // test_bridge_stress — three-phase randomized stress test
+  //
+  // Mirrors test/tb_stress_burst.v.  Reads +N=<n> plusarg (default 100) to
+  // control the number of random transactions in phase 2.  Data integrity is
+  // verified by bridge_scoreboard via the shared APB side model.
+  //
+  // Run with:  +UVM_TESTNAME=test_bridge_stress [+N=<n>]
+  // =========================================================================
+  class test_bridge_stress extends bridge_base_test #(64);
+    `uvm_component_utils(test_bridge_stress)
+
+    function new(string name, uvm_component parent);
+      super.new(name, parent);
+    endfunction
+
+    task run_phase(uvm_phase phase);
+      bridge_axi_stim_64    stim;
+      bridge_stress_seq     seq;
+      virtual apb_mon_if    apb_vif;
+      int unsigned          n_txn;
+      string                n_str;
+
+      // Read transaction count from plusarg.
+      if ($value$plusargs("N=%s", n_str))
+        n_txn = n_str.atoi();
+      else
+        n_txn = 100;
+
+      // Retrieve APB side interface so axi_write_burst_ext can drive PSLVERR.
+      if (!uvm_config_db #(virtual apb_mon_if)::get(
+              this, "", "apb_side_vif", apb_vif))
+        `uvm_fatal(get_type_name(), "apb_side_vif not found in config_db")
+
+      stim = bridge_axi_stim_64::type_id::create("stim", this);
+      stim.sif = apb_vif;
+
+      if (!uvm_config_db #(virtual axi4_master_if)::get(
+              this, "", "axi_vif", stim.vif))
+        `uvm_fatal(get_type_name(), "axi_vif not found in config_db")
+
+      seq          = bridge_stress_seq::type_id::create("seq", this);
+      seq.stim     = stim;
+      seq.n_txn    = n_txn;
+
+      phase.raise_objection(this);
+
+      fork
+        begin
+          // Generous timeout: seed(32) + n_txn random + sweep(32) beats,
+          // each beat at most ~20 APB cycles @ 10 ns => ~(n_txn+64)*200 ns.
+          #( longint'(n_txn + 64) * 200 * 10 );
+          `uvm_fatal(get_type_name(),
+              $sformatf("TIMEOUT after %0d+64 transactions", n_txn))
+        end
+        begin
+          seq.run();
+          `uvm_info(get_type_name(),
+              $sformatf("STRESS TEST PASSED (N=%0d)", n_txn), UVM_MEDIUM)
+        end
+      join_any
+      disable fork;
+      phase.drop_objection(this);
+    endtask
+  endclass
+
 endpackage

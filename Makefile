@@ -96,9 +96,9 @@ WAVETB ?= simple
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
 	regress coverage formal ci cocotb _lint_iverilog _lint_verilator \
 	uvm-vcs uvm-vcs-simple uvm-vcs-burst uvm-vcs-burst-ext uvm-vcs-simple-ws uvm-vcs-parameterized \
-	uvm-vcs-rand-burst uvm-vcs-rand-integrity \
+	uvm-vcs-rand-burst uvm-vcs-rand-integrity uvm-vcs-stress \
 	uvm-xcelium uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized \
-	uvm-xcelium-rand-burst uvm-xcelium-rand-integrity
+	uvm-xcelium-rand-burst uvm-xcelium-rand-integrity uvm-xcelium-stress
 
 default: help
 
@@ -143,6 +143,7 @@ help:
 	@echo "    make uvm-vcs-simple-ws [READ_WS=N]  # default READ_WS=2"
 	@echo "    make uvm-vcs-rand-burst             # constrained-random write+read sequences"
 	@echo "    make uvm-vcs-rand-integrity         # write-then-read integrity rounds"
+	@echo "    make uvm-vcs-stress [STRESS_N=N]    # three-phase stress (mirrors tb_stress_burst.v)"
 	@echo "    make uvm-vcs                        # all 5 directed VCS targets"
 	@echo ""
 	@echo "  UVM simulation — Cadence Xcelium (requires export UVM_HOME=...):"
@@ -150,6 +151,7 @@ help:
 	@echo "    make uvm-xcelium-simple-ws [READ_WS=N]  # default READ_WS=2"
 	@echo "    make uvm-xcelium-rand-burst             # constrained-random write+read sequences"
 	@echo "    make uvm-xcelium-rand-integrity         # write-then-read integrity rounds"
+	@echo "    make uvm-xcelium-stress [STRESS_N=N]    # three-phase stress (mirrors tb_stress_burst.v)"
 	@echo "    make uvm-xcelium                        # all 5 directed Xcelium targets"
 	@echo ""
 	@echo "  Docs:"
@@ -228,6 +230,9 @@ uvm-vcs-rand-burst:
 uvm-vcs-rand-integrity:
 	$(MAKE) -C $(CURDIR)/uvm/vcs sim_rand_integrity
 
+uvm-vcs-stress:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_stress STRESS_N=$(STRESS_N)
+
 uvm-vcs: uvm-vcs-simple uvm-vcs-burst uvm-vcs-burst-ext uvm-vcs-simple-ws uvm-vcs-parameterized
 
 uvm-xcelium-simple:
@@ -250,6 +255,9 @@ uvm-xcelium-rand-burst:
 
 uvm-xcelium-rand-integrity:
 	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_rand_integrity
+
+uvm-xcelium-stress:
+	$(MAKE) -C $(CURDIR)/uvm/xcelium sim_stress STRESS_N=$(STRESS_N)
 
 uvm-xcelium: uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized
 

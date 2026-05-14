@@ -175,6 +175,24 @@ SUITES: tuple[Suite, ...] = (
             "test_bridge_rand_integrity",
         ),
     ),
+    Suite(
+        "stress",
+        # Verilog stress TB is the canonical reference for this suite.
+        "test/tb_stress_burst.v",
+        (
+            "uvm/sv/seq/bridge_rand_stim.sv",
+            "uvm/sv/pkg/bridge_uvm_tests_pkg.sv",
+        ),
+        needles_ref=(),   # no shared literals mandated between Verilog and UVM
+        needles_mirror_only=(
+            "bridge_stress_seq",
+            "test_bridge_stress",
+            "sh_written",
+            "mark_written",
+            "all_written",
+            "STRESS TEST PASSED",
+        ),
+    ),
 )
 
 

@@ -19,7 +19,7 @@ RTL       = $(abspath ../../src)
 READ_WS ?= 2
 
 .PHONY: sim_simple sim_burst sim_burst_ext sim_simple_ws sim_parameterized \
-        sim_rand_burst sim_rand_integrity clean
+        sim_rand_burst sim_rand_integrity sim_stress clean
 
 sim_simple:
 	$(XRUN) $(XRUN_FLAGS) $(UVM_ARGS) $(IFDIR) \
@@ -129,7 +129,27 @@ sim_rand_integrity:
 	  -top tb_uvm_burst_ext \
 	  -log sim_rand_integrity.log
 
+STRESS_N ?= 100
+
+sim_stress:
+	$(XRUN) $(XRUN_FLAGS) $(UVM_ARGS) $(IFDIR) \
+	  $(RTL)/axi4_to_apb4_2x_burst.v \
+	  ../sv/interfaces/axi4_master_if.sv \
+	  ../sv/interfaces/apb_sel_tracker_if.sv \
+	  ../sv/interfaces/apb_burst_ext_side_if.sv \
+	  ../sv/models/apb_ext_mem_dual.sv \
+	  ../sv/pkg/bridge_stimulus_pkg.sv \
+	  ../sv/interfaces/apb_mon_if.sv \
+	  ../sv/pkg/bridge_uvm_env_pkg.sv \
+	  ../sv/pkg/bridge_uvm_tests_pkg.sv \
+	  ../tb/tb_uvm_burst_ext.sv \
+	  +UVM_TESTNAME=test_bridge_stress \
+	  +N=$(STRESS_N) \
+	  -top tb_uvm_burst_ext \
+	  -log sim_stress.log
+
 clean:
 	rm -f sim_simple.log sim_burst.log sim_burst_ext.log sim_simple_ws.log \
-	      sim_parameterized.log sim_rand_burst.log sim_rand_integrity.log
+	      sim_parameterized.log sim_rand_burst.log sim_rand_integrity.log \
+	      sim_stress.log
 	rm -rf xcelium.d INCA_libs *.shm xrun.log *.key

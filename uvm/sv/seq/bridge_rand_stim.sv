@@ -163,4 +163,141 @@ class bridge_rand_seq extends uvm_object;
 
 endclass
 
+// ---------------------------------------------------------------------------
+// Three-phase stress sequence — mirrors test/tb_stress_burst.v
+//
+// Phase 1 (seed): write 16 words to each APB port at fixed addresses.
+// Phase 2 (random): n_txn random single/burst reads and writes across both
+//   ports; reads only target addresses that were previously written.
+// Phase 3 (sweep): read back all 16 seed words from each port.
+//
+// Data integrity is verified by the scoreboard (slv_shadow), not here.
+// ---------------------------------------------------------------------------
+
+class bridge_stress_seq extends uvm_object;
+    `uvm_object_utils(bridge_stress_seq)
+
+    int unsigned n_txn    = 100;   // random transaction count (phase 2)
+    int unsigned seed_off = 0;     // per-instance seed offset
+
+    bridge_axi_stim_64 stim;       // connected by the test before calling run()
+
+    // Sparse set of (port<<16 | addr_page) keys that have been written.
+    bit sh_written[int unsigned];
+
+    function new(string name = "bridge_stress_seq");
+        super.new(name);
+    endfunction
+
+    // Compose the sh_written key from a rand item.
+    function automatic int unsigned mk_key(int unsigned port, int unsigned page);
+        return (port << 16) | page;
+    endfunction
+
+    // Record all pages written by item (INCR touches consecutive pages,
+    // FIXED touches only one page repeated).
+    function void mark_written(bridge_rand_item item);
+        int unsigned port  = int unsigned'(item.apb_port);
+        int unsigned page0 = int unsigned'(item.addr_page);
+        if (item.burst_type == 2'b01) begin   // INCR
+            for (int unsigned b = 0; b <= int unsigned'(item.burst_len); b++)
+                sh_written[mk_key(port, page0 + b)] = 1;
+        end else begin                         // FIXED
+            sh_written[mk_key(port, page0)] = 1;
+        end
+    endfunction
+
+    // Return 1 if every beat of a read burst has a written backing entry.
+    function bit all_written(bridge_rand_item item);
+        int unsigned port  = int unsigned'(item.apb_port);
+        int unsigned page0 = int unsigned'(item.addr_page);
+        if (item.burst_type == 2'b01) begin
+            for (int unsigned b = 0; b <= int unsigned'(item.burst_len); b++)
+                if (!sh_written.exists(mk_key(port, page0 + b))) return 0;
+        end else begin
+            if (!sh_written.exists(mk_key(port, page0))) return 0;
+        end
+        return 1;
+    endfunction
+
+    // -----------------------------------------------------------------------
+    // Main entry point.
+    // -----------------------------------------------------------------------
+    task run();
+        logic [1:0] resp;
+
+        if (stim == null)
+            `uvm_fatal("STRESS_SEQ", "stim handle is null; connect stim before calling run()")
+
+        // Phase 1: seed 16 single-beat writes to each APB port.
+        `uvm_info("STRESS_SEQ", "Phase 1: seeding both APB ports", UVM_MEDIUM)
+        for (int unsigned i = 0; i < 16; i++) begin
+            logic [31:0] a0 = {1'b0, 15'b0, 13'(i), 3'b0};   // APB0
+            logic [31:0] a1 = {1'b1, 15'b0, 13'(i), 3'b0};   // APB1
+            stim.axi_write_burst_ext(a0, 8'h00, 2'b01, 8'h00, 8'hFF, resp);
+            sh_written[mk_key(0, i)] = 1;
+            stim.axi_write_burst_ext(a1, 8'h00, 2'b01, 8'h00, 8'hFF, resp);
+            sh_written[mk_key(1, i)] = 1;
+        end
+
+        // Phase 2: n_txn random single/burst transactions.
+        `uvm_info("STRESS_SEQ",
+            $sformatf("Phase 2: %0d random transactions", n_txn), UVM_MEDIUM)
+        begin
+            int unsigned attempts;
+            int unsigned done;
+            done     = 0;
+            attempts = 0;
+            while (done < n_txn) begin
+                bridge_rand_item item;
+                item = bridge_rand_item::type_id::create(
+                    $sformatf("stress_%0d", done));
+
+                if (!item.randomize())
+                    `uvm_fatal("STRESS_SEQ", "randomize() failed")
+
+                // For reads, skip if no backing write exists (retry).
+                if (!item.is_write && !all_written(item)) begin
+                    attempts++;
+                    if (attempts > n_txn * 4) begin
+                        `uvm_warning("STRESS_SEQ",
+                            "Too many read-skip retries; forcing write")
+                        void'(item.randomize() with { is_write == 1'b1; });
+                    end else
+                        continue;
+                end
+
+                `uvm_info("STRESS_SEQ",
+                    $sformatf("  [T%0d] %s", done, item.convert2string()),
+                    UVM_HIGH)
+
+                if (item.is_write) begin
+                    stim.axi_write_burst_ext(
+                        item.addr, item.burst_len, item.burst_type,
+                        item.burst_len, 8'hFF, resp);
+                    mark_written(item);
+                end else begin
+                    stim.axi_read_burst_ext(
+                        item.addr, item.burst_len, item.burst_type, resp);
+                end
+                done++;
+                attempts = 0;
+            end
+        end
+
+        // Phase 3: sweep-read the 16 seed words from each port.
+        `uvm_info("STRESS_SEQ", "Phase 3: sweep read-back", UVM_MEDIUM)
+        for (int unsigned i = 0; i < 16; i++) begin
+            logic [31:0] a0 = {1'b0, 15'b0, 13'(i), 3'b0};
+            logic [31:0] a1 = {1'b1, 15'b0, 13'(i), 3'b0};
+            stim.axi_read_burst_ext(a0, 8'h00, 2'b01, resp);
+            stim.axi_read_burst_ext(a1, 8'h00, 2'b01, resp);
+        end
+
+        `uvm_info("STRESS_SEQ",
+            $sformatf("bridge_stress_seq: DONE (%0d txn)", n_txn), UVM_MEDIUM)
+    endtask
+
+endclass
+
 `endif
