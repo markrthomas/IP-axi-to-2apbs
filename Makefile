@@ -160,6 +160,11 @@ help:
 	@echo "    make md-pdfs                  # every *.md under . (except .git) -> sibling .pdf"
 	@echo "    PANDOC_PDF_ENGINE=xelatex     # optional, for richer Unicode/fonts"
 	@echo ""
+	@echo "  Coverage:"
+	@echo "    make cov-report                   # build + run + terminal table + coverage_report.html"
+	@echo "    COV_REPORT_HTML=my.html make cov-report"
+	@echo "    make coverage                     # build + run only (produces .info files)"
+	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
 # --- tests -------------------------------------------------------------------
@@ -434,9 +439,18 @@ _lint_verilator:
 regress: _lint_iverilog _lint_verilator test-all
 	@echo "[REGRESS] lint + directed sim PASSED"
 
+COV_REPORT_HTML ?= coverage_report.html
+
 # coverage: Verilator --coverage for both bridge variants; emits coverage_simple.info + coverage_burst.info.
 coverage: _cov_simple _cov_burst
 	@echo "[COVERAGE] Done. Wrote coverage_simple.info and coverage_burst.info."
+
+# cov-report: run coverage then render terminal summary + self-contained HTML report.
+cov-report: coverage
+	python3 $(CURDIR)/scripts/cov_report.py \
+		--root $(CURDIR) \
+		--out $(COV_REPORT_HTML) \
+		coverage_simple.info coverage_burst.info
 
 _cov_simple:
 	@command -v $(VERILATOR) >/dev/null 2>&1 || { echo "[COVERAGE] verilator not on PATH; skipping"; exit 0; }
@@ -450,7 +464,7 @@ _cov_simple:
 		$(VERILATOR_CPP) -pthread -lm
 	cd $(COV_DIR_SIMPLE) && ./sim_simple
 	@if command -v verilator_coverage >/dev/null 2>&1; then \
-		verilator_coverage --write-info ../coverage_simple.info $(COV_DIR_SIMPLE)/coverage.dat; \
+		verilator_coverage -write-info coverage_simple.info $(COV_DIR_SIMPLE)/coverage.dat; \
 		echo "[COVERAGE] simple: coverage_simple.info written"; \
 	else \
 		echo "[COVERAGE] simple: coverage.dat in $(COV_DIR_SIMPLE) (install verilator for lcov export)"; \
@@ -468,7 +482,7 @@ _cov_burst:
 		$(VERILATOR_CPP) -pthread -lm
 	cd $(COV_DIR_BURST) && ./sim_burst
 	@if command -v verilator_coverage >/dev/null 2>&1; then \
-		verilator_coverage --write-info ../coverage_burst.info $(COV_DIR_BURST)/coverage.dat; \
+		verilator_coverage -write-info coverage_burst.info $(COV_DIR_BURST)/coverage.dat; \
 		echo "[COVERAGE] burst: coverage_burst.info written"; \
 	else \
 		echo "[COVERAGE] burst: coverage.dat in $(COV_DIR_BURST) (install verilator for lcov export)"; \
@@ -496,12 +510,12 @@ cocotb:
 ci: regress coverage check-uvm-mirror cocotb
 	@echo "[CI] All gates passed."
 
-.PHONY: regress coverage _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
+.PHONY: regress coverage cov-report _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress \
 		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
-		coverage_simple.info coverage_burst.info
+		coverage_simple.info coverage_burst.info $(COV_REPORT_HTML)
 	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST)
 	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/vcs clean 2>/dev/null || true
