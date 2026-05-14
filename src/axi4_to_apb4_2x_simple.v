@@ -199,6 +199,9 @@ module axi4_to_apb4_2x_simple #(
 
                 ST_READ_RESP: if (!S_AXI_RVALID) state <= ST_IDLE;
 
+                // Excluded from coverage: no legal AXI stimulus can produce an
+                // out-of-range state value; arm is unreachable by design.
+                // See doc/coverage_notes.md §Exclusions.
                 default: begin /*verilator coverage_block_off*/ state <= ST_IDLE; end
             endcase
         end

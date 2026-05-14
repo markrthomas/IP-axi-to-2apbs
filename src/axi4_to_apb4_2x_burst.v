@@ -247,6 +247,9 @@ module axi4_to_apb4_2x_burst #(
                         apb_state <= APB_IDLE;
                     end
                 end
+                // Excluded from coverage: no legal AXI stimulus can produce an
+                // out-of-range apb_state value; arm is unreachable by design.
+                // See doc/coverage_notes.md §Exclusions.
                 default: begin /*verilator coverage_block_off*/ apb_state <= APB_IDLE; end
             endcase
         end
