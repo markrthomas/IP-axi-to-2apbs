@@ -247,7 +247,7 @@ module axi4_to_apb4_2x_burst #(
                         apb_state <= APB_IDLE;
                     end
                 end
-                default: apb_state <= APB_IDLE;
+                default: begin /*verilator coverage_block_off*/ apb_state <= APB_IDLE; end
             endcase
         end
     end

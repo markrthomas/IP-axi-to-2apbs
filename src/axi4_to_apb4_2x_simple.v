@@ -199,7 +199,7 @@ module axi4_to_apb4_2x_simple #(
 
                 ST_READ_RESP: if (!S_AXI_RVALID) state <= ST_IDLE;
 
-                default: state <= ST_IDLE;
+                default: begin /*verilator coverage_block_off*/ state <= ST_IDLE; end
             endcase
         end
     end
