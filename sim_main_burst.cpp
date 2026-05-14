@@ -1,5 +1,7 @@
 // Verilator coverage harness for axi4_to_apb4_2x_burst.
-// Exercises: single-beat write/read to APB0/1, 4-beat burst write/read, illegal-burst error.
+// Exercises: single/burst write+read to APB0/1, PSLVERR on both ports,
+// WLAST error, APB-port-crossing INCR burst, illegal AWBURST/ARBURST (DECERR),
+// non-zero AWPROT/ARPROT.
 #include "Vaxi4_to_apb4_2x_burst.h"
 #include "verilated.h"
 #if VM_COVERAGE
@@ -12,14 +14,23 @@ double sc_time_stamp() { return (double)g_time; }
 
 static Vaxi4_to_apb4_2x_burst* top;
 
-// Zero-wait-state APB slave: PREADY follows PENABLE.
+// Inject PSLVERR: -1=none, 0=port0, 1=port1.
+static int g_slverr_port = -1;
+// Inject PSLVERR only for a limited number of APB accesses (beats).
+static int g_slverr_beats = 0;
+
 static void apb_slave() {
     top->PREADY0  = top->PENABLE0;
     top->PREADY1  = top->PENABLE1;
     top->PRDATA0  = (uint64_t)0xDEADBEEFCAFEBABEULL;
     top->PRDATA1  = (uint64_t)0x0123456789ABCDEFULL;
-    top->PSLVERR0 = 0;
-    top->PSLVERR1 = 0;
+
+    bool inject0 = (g_slverr_port == 0 && top->PENABLE0 && g_slverr_beats > 0);
+    bool inject1 = (g_slverr_port == 1 && top->PENABLE1 && g_slverr_beats > 0);
+    top->PSLVERR0 = inject0 ? 1 : 0;
+    top->PSLVERR1 = inject1 ? 1 : 0;
+    if ((inject0 || inject1) && (top->PREADY0 || top->PREADY1))
+        g_slverr_beats--;
 }
 
 static void tick() {
@@ -29,15 +40,16 @@ static void tick() {
     ++g_time;
 }
 
-// Drive AW handshake; caller sets up all AW fields before calling.
-static void do_aw(uint32_t addr, uint8_t awlen, uint8_t awburst = 1) {
+// AW handshake.
+static void do_aw(uint32_t addr, uint8_t awlen, uint8_t awburst = 1,
+                  uint8_t awprot = 0) {
     top->S_AXI_AWVALID = 1;
     top->S_AXI_AWADDR  = addr;
     top->S_AXI_AWID    = 1;
     top->S_AXI_AWLEN   = awlen;
     top->S_AXI_AWSIZE  = 3;
     top->S_AXI_AWBURST = awburst;
-    top->S_AXI_AWPROT  = 0;
+    top->S_AXI_AWPROT  = awprot;
     for (int i = 0; i < 64; i++) {
         apb_slave();
         bool aw_hs = top->S_AXI_AWVALID && top->S_AXI_AWREADY;
@@ -49,12 +61,14 @@ static void do_aw(uint32_t addr, uint8_t awlen, uint8_t awburst = 1) {
     }
 }
 
-// Drive one W beat; waits for WREADY.
-static void do_w_beat(uint64_t data, bool last) {
+// One W beat; wlast_override=-1 means use natural last (beat == awlen).
+static void do_w_beat(uint64_t data, bool natural_last,
+                      int wlast_override = -1) {
     top->S_AXI_WVALID = 1;
     top->S_AXI_WDATA  = data;
     top->S_AXI_WSTRB  = 0xFF;
-    top->S_AXI_WLAST  = last ? 1 : 0;
+    top->S_AXI_WLAST  = (wlast_override >= 0) ? (uint8_t)wlast_override
+                                               : (natural_last ? 1 : 0);
     for (int i = 0; i < 64; i++) {
         apb_slave();
         bool w_hs = top->S_AXI_WVALID && top->S_AXI_WREADY;
@@ -66,7 +80,7 @@ static void do_w_beat(uint64_t data, bool last) {
     }
 }
 
-// Wait for B response.
+// Wait for B response; clears slverr state.
 static void wait_b() {
     top->S_AXI_BREADY = 1;
     for (int i = 0; i < 256; i++) {
@@ -75,24 +89,24 @@ static void wait_b() {
         top->ACLK = 1; top->eval();
         top->ACLK = 0; top->eval();
         ++g_time;
-        if (b_hs) break;
+        if (b_hs) { g_slverr_port = -1; g_slverr_beats = 0; break; }
     }
     top->S_AXI_BREADY = 0;
     tick();
 }
 
-// Drive AR handshake + collect all R beats.
-static void do_read(uint32_t addr, int beats) {
+// AR handshake + collect all R beats; clears slverr state.
+static void do_read(uint32_t addr, int beats, uint8_t arburst = 1,
+                    uint8_t arprot = 0) {
     top->S_AXI_ARVALID = 1;
     top->S_AXI_ARADDR  = addr;
     top->S_AXI_ARID    = 2;
     top->S_AXI_ARLEN   = beats - 1;
     top->S_AXI_ARSIZE  = 3;
-    top->S_AXI_ARBURST = 1;
-    top->S_AXI_ARPROT  = 0;
+    top->S_AXI_ARBURST = arburst;
+    top->S_AXI_ARPROT  = arprot;
     top->S_AXI_RREADY  = 1;
 
-    // AR handshake.
     for (int i = 0; i < 64; i++) {
         apb_slave();
         bool ar_hs = top->S_AXI_ARVALID && top->S_AXI_ARREADY;
@@ -102,7 +116,6 @@ static void do_read(uint32_t addr, int beats) {
         ++g_time;
         if (ar_hs) break;
     }
-    // Collect R beats.
     int recv = 0;
     for (int i = 0; i < beats * 32 && recv < beats; i++) {
         apb_slave();
@@ -112,7 +125,7 @@ static void do_read(uint32_t addr, int beats) {
         if (r_hs) recv++;
         top->ACLK = 0; top->eval();
         ++g_time;
-        if (r_hs && rlast) break;
+        if (r_hs && rlast) { g_slverr_port = -1; g_slverr_beats = 0; break; }
     }
     top->S_AXI_RREADY = 0;
     tick();
@@ -129,7 +142,6 @@ int main(int argc, char** argv) {
     top->PRDATA1 = 0; top->PREADY1 = 0; top->PSLVERR1 = 0;
     top->eval();
 
-    // Reset.
     for (int i = 0; i < 8; i++) tick();
     top->ARESETn = 1;
     tick(); tick();
@@ -139,15 +151,15 @@ int main(int argc, char** argv) {
     do_w_beat(0xCAFEBABE00000001ULL, true);
     wait_b();
 
-    // 2. Single-beat write to APB slave 1 (addr[31]=1).
+    // 2. Single-beat write to APB slave 1.
     do_aw(0x80001000, 0);
     do_w_beat(0xCAFEBABE00000002ULL, true);
     wait_b();
 
-    // 3. 4-beat burst write to APB slave 0 (AWLEN=3 → beats_total=4).
+    // 3. 4-beat INCR burst write to APB slave 0.
     do_aw(0x00002000, 3);
     for (int b = 0; b < 4; b++)
-        do_w_beat((uint64_t)0xA0A0A0A0B0B0B0B0ULL + b, b == 3);
+        do_w_beat(0xA0A0A0A0B0B0B0B0ULL + b, b == 3);
     wait_b();
 
     // 4. Single-beat read from APB slave 0.
@@ -156,15 +168,64 @@ int main(int argc, char** argv) {
     // 5. Single-beat read from APB slave 1.
     do_read(0x80003000, 1);
 
-    // 6. 4-beat burst read from APB slave 0.
+    // 6. 4-beat INCR burst read from APB slave 0.
     do_read(0x00004000, 4);
 
-    // 7. Illegal AWBURST=2 (WRAP > 2'b01) → txn_decerr → SLVERR.
+    // 7. Illegal AWBURST=2 (WRAP) write → txn_decerr → BRESP=DECERR.
     do_aw(0x00005000, 0, /*awburst=*/2);
     do_w_beat(0xBADBADBADBADBADDULL, true);
     wait_b();
 
-    // Settle.
+    // 8. Illegal ARBURST=2 (WRAP) read → txn_decerr read path (lines 281-286).
+    do_read(0x00006000, 1, /*arburst=*/2);
+
+    // 9. APB-port-crossing INCR write → aw_cross_apb=1 → txn_decerr (lines 116,119).
+    //    addr=0x7FFF_FFE8, awlen=3, awsize=3: last_addr = 0x7FFF_FFE8+0x18 = 0x8000_0000
+    do_aw(0x7FFFFFE8, 3, /*awburst=*/1);
+    for (int b = 0; b < 4; b++)
+        do_w_beat(0xCCCCCCCCDDDDDDDDULL + b, b == 3);
+    wait_b();
+
+    // 10. APB-port-crossing INCR read → ar_cross_apb=1 (line 117).
+    //     addr=0x7FFFFFE8, arlen=3, arsize=3: last=0x8000_0000
+    do_read(0x7FFFFFE8, 4, /*arburst=*/1);
+
+    // 11. PSLVERR on APB slave 0 write → pslverr_acc=1 → BRESP=SLVERR.
+    g_slverr_port = 0; g_slverr_beats = 1;
+    do_aw(0x00007000, 0);
+    do_w_beat(0xDEADBEEFCAFEBABEULL, true);
+    wait_b();
+
+    // 12. PSLVERR on APB slave 1 write → BRESP=SLVERR.
+    g_slverr_port = 1; g_slverr_beats = 1;
+    do_aw(0x80007000, 0);
+    do_w_beat(0xDEADBEEFCAFEBABEULL, true);
+    wait_b();
+
+    // 13. PSLVERR on APB slave 0 read → RRESP=SLVERR (exercises rresp_fifo path).
+    g_slverr_port = 0; g_slverr_beats = 1;
+    do_read(0x00008000, 1);
+
+    // 14. WLAST on wrong beat → wlast_err=1 → BRESP=SLVERR (line 185).
+    //     4-beat burst but WLAST asserted on beat 1 (index 1 of 4).
+    do_aw(0x00009000, 3);
+    do_w_beat(0x1111111111111111ULL, false, /*wlast_override=*/0);  // beat 0, no early last
+    do_w_beat(0x2222222222222222ULL, false, /*wlast_override=*/1);  // beat 1, EARLY LAST
+    do_w_beat(0x3333333333333333ULL, false, /*wlast_override=*/0);  // beat 2
+    do_w_beat(0x4444444444444444ULL, true,  /*wlast_override=*/1);  // beat 3, natural last
+    wait_b();
+
+    // 15. Non-zero AWPROT/ARPROT → exercises axi_prot_reg capture.
+    //     Drive both APB0 and APB1 with non-zero prot to cover PPROT0 and PPROT1.
+    do_aw(0x0000A000, 0, /*awburst=*/1, /*awprot=*/3);
+    do_w_beat(0x5A5A5A5A5A5A5A5AULL, true);
+    wait_b();
+    do_read(0x0000A000, 1, /*arburst=*/1, /*arprot=*/5);
+    do_aw(0x8000A000, 0, /*awburst=*/1, /*awprot=*/3);
+    do_w_beat(0xA5A5A5A5A5A5A5A5ULL, true);
+    wait_b();
+    do_read(0x8000A000, 1, /*arburst=*/1, /*arprot=*/5);
+
     for (int i = 0; i < 8; i++) tick();
 
 #if VM_COVERAGE
