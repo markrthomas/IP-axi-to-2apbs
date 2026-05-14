@@ -61,10 +61,18 @@ BURST_EXT_TB = test/tb_axi4_to_apb4_2x_burst_extended.v
 BURST_RTL = src/axi4_to_apb4_2x_burst.v
 SIMPLE_WS_TB = test/tb_axi4_to_apb4_2x_simple_ws.v
 PARAM_TB = test/tb_parameterized_config.v
+STRESS_TB = test/tb_stress_burst.v
 WAVE_MACROS = test/wave_macros.v
 
 WAIT_CYCLES ?= 2
 READ_WS     ?= 2
+
+# Stress test knobs (passed as vvp plusargs)
+STRESS_N     ?= 200   # random transactions (total sim length)
+STRESS_SEED  ?= 0     # $random seed; change for different stimulus
+STRESS_WAIT0 ?= 1     # APB0 wait cycles per transfer
+STRESS_WAIT1 ?= 1     # APB1 wait cycles per transfer
+STRESS_BP    ?= 3     # max BREADY/RREADY back-pressure cycles
 
 # Waveform dumps (GTKWave / Surfer). FST requires vvp -fst after the sim binary.
 WAVEFMT ?= fst
@@ -82,6 +90,7 @@ WAVETB ?= simple
 
 .PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv lint-uvm-sv-relaxed \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
+	test-stress wave-stress gtk-stress \
 	lint clean sim readme-pdf readme-md-pdfs md-pdfs \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
@@ -104,6 +113,10 @@ help:
 	@echo "    make check-full    # lint then test-full"
 	@echo "    make test-simple | test-burst | test-burst-ext | test-param | test-simple-ws"
 	@echo "    make test-simple-ws-sweep    # WAIT_CYCLES 1,2,3"
+	@echo "    make test-stress             # randomised stress (STRESS_N/SEED/WAIT0/WAIT1/BP)"
+	@echo "    make wave-stress             # stress + FST waveform dump"
+	@echo "    make gtk-stress              # stress + launch GTKWave"
+	@echo "    STRESS_N=500 STRESS_SEED=7 STRESS_WAIT0=2 STRESS_WAIT1=0 STRESS_BP=4"
 	@echo ""
 	@echo "  Build simulators only:"
 	@echo "    make sim                    # WAVETB=simple|burst|burst-ext|simple-ws|param"
@@ -256,6 +269,27 @@ sim_simple_ws_%: $(SIMPLE_WS_TB) $(SIMPLE_RTL) $(WAVE_MACROS)
 
 sim_param: $(PARAM_TB) $(BURST_RTL) $(WAVE_MACROS)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(filter-out $(WAVE_MACROS),$^)
+
+sim_stress: $(STRESS_TB) $(BURST_RTL) $(WAVE_MACROS)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(filter-out $(WAVE_MACROS),$^)
+
+# Run without waveform (fast pass/fail)
+test-stress: sim_stress
+	$(VVP) sim_stress \
+	  +N=$(STRESS_N) +SEED=$(STRESS_SEED) \
+	  +WAIT0=$(STRESS_WAIT0) +WAIT1=$(STRESS_WAIT1) +BP=$(STRESS_BP)
+
+# Run with waveform dump (FST for GTKWave / Surfer)
+wave-stress: WAVEFILE ?= waves_stress.fst
+wave-stress: sim_stress
+	$(VVP) sim_stress $(VVP_WAVEFLAGS) \
+	  +N=$(STRESS_N) +SEED=$(STRESS_SEED) \
+	  +WAIT0=$(STRESS_WAIT0) +WAIT1=$(STRESS_WAIT1) +BP=$(STRESS_BP) \
+	  +wave +wavefile=$(WAVEFILE)
+
+gtk-stress: WAVEFILE ?= waves_stress.fst
+gtk-stress: wave-stress
+	$(GTK_OPEN)
 
 ifeq ($(WAVETB),simple)
   SIM_BIN := sim_simple
@@ -457,7 +491,7 @@ ci: regress coverage check-uvm-mirror cocotb
 .PHONY: regress coverage _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
 
 clean:
-	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param \
+	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress \
 		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
 		coverage_simple.info coverage_burst.info
 	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST)
