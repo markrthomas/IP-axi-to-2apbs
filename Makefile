@@ -54,6 +54,10 @@ ALL_README_PDF := $(ALL_README_MD:%.md=%.pdf)
 
 README_PDF_DEFAULT := $(patsubst %.md,%.pdf,$(README_MD))
 
+REGBLOCK_RTL = src/axi3lite_regblock.v
+REGBLOCK_TB  = test/tb_axi3lite_regblock.v
+COV_DIR_RB   = obj_dir_cov_regblock
+
 SIMPLE_TB = test/tb_axi4_to_apb4_2x_simple.v
 SIMPLE_RTL = src/axi4_to_apb4_2x_simple.v
 BURST_TB = test/tb_axi4_to_apb4_2x_burst.v
@@ -90,13 +94,15 @@ WAVETB ?= simple
 
 .PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv lint-uvm-sv-relaxed \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
-	test-stress wave-stress gtk-stress \
+	test-stress wave-stress gtk-stress test-regblock \
 	lint clean sim readme-pdf readme-md-pdfs md-pdfs \
 	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
-	regress coverage formal ci cocotb _lint_iverilog _lint_verilator \
+	regress coverage cov-report formal ci cocotb cocotb-regblock _lint_iverilog _lint_verilator \
+	_cov_regblock \
 	uvm-vcs uvm-vcs-simple uvm-vcs-burst uvm-vcs-burst-ext uvm-vcs-simple-ws uvm-vcs-parameterized \
 	uvm-vcs-rand-burst uvm-vcs-rand-integrity uvm-vcs-stress \
+	uvm-vcs-regblock-hw-reset uvm-vcs-regblock-bit-bash uvm-vcs-regblock-reg-access uvm-vcs-regblock-directed \
 	uvm-xcelium uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized \
 	uvm-xcelium-rand-burst uvm-xcelium-rand-integrity uvm-xcelium-stress
 
@@ -171,13 +177,16 @@ help:
 
 test: test-all
 
-test-all: test-simple test-burst
+test-all: test-simple test-burst test-regblock
 
 test-full: test-simple test-burst test-burst-ext test-param test-simple-ws
 
 check: lint test-all
 
 check-full: lint test-full
+
+test-regblock: sim_regblock
+	$(VVP) sim_regblock
 
 test-simple: sim_simple
 	$(VVP) sim_simple
@@ -267,6 +276,9 @@ uvm-xcelium-stress:
 uvm-xcelium: uvm-xcelium-simple uvm-xcelium-burst uvm-xcelium-burst-ext uvm-xcelium-simple-ws uvm-xcelium-parameterized
 
 # --- compile -----------------------------------------------------------------
+
+sim_regblock: $(REGBLOCK_TB) $(REGBLOCK_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $^
 
 sim_simple: $(SIMPLE_TB) $(SIMPLE_RTL) $(WAVE_MACROS)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(filter-out $(WAVE_MACROS),$^)
@@ -425,12 +437,14 @@ _lint_iverilog:
 	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_burst_w $(BURST_TB) $(BURST_RTL)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_burst_ext_w $(BURST_EXT_TB) $(BURST_RTL)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_param_w $(PARAM_TB) $(BURST_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_regblock_w $(REGBLOCK_TB) $(REGBLOCK_RTL)
 
 _lint_verilator:
 	@if command -v $(VERILATOR) >/dev/null 2>&1; then \
 		echo "[LINT] Verilator RTL lint..."; \
 		$(VERILATOR) --lint-only -Wall -Wno-DECLFILENAME $(SIMPLE_RTL); \
 		$(VERILATOR) --lint-only -Wall -Wno-DECLFILENAME $(BURST_RTL); \
+		$(VERILATOR) --lint-only -Wall -Wno-DECLFILENAME $(REGBLOCK_RTL); \
 	else \
 		echo "[LINT] verilator not on PATH — skipping RTL lint"; \
 	fi
@@ -441,16 +455,16 @@ regress: _lint_iverilog _lint_verilator test-all
 
 COV_REPORT_HTML ?= coverage_report.html
 
-# coverage: Verilator --coverage for both bridge variants; emits coverage_simple.info + coverage_burst.info.
-coverage: _cov_simple _cov_burst
-	@echo "[COVERAGE] Done. Wrote coverage_simple.info and coverage_burst.info."
+# coverage: Verilator --coverage for all three RTL blocks.
+coverage: _cov_simple _cov_burst _cov_regblock
+	@echo "[COVERAGE] Done. Wrote coverage_simple.info, coverage_burst.info, coverage_regblock.info."
 
 # cov-report: run coverage then render terminal summary + self-contained HTML report.
 cov-report: coverage
 	python3 $(CURDIR)/scripts/cov_report.py \
 		--root $(CURDIR) \
 		--out $(COV_REPORT_HTML) \
-		coverage_simple.info coverage_burst.info
+		coverage_simple.info coverage_burst.info coverage_regblock.info
 
 _cov_simple:
 	@command -v $(VERILATOR) >/dev/null 2>&1 || { echo "[COVERAGE] verilator not on PATH; skipping"; exit 0; }
@@ -488,6 +502,37 @@ _cov_burst:
 		echo "[COVERAGE] burst: coverage.dat in $(COV_DIR_BURST) (install verilator for lcov export)"; \
 	fi
 
+_cov_regblock:
+	@command -v $(VERILATOR) >/dev/null 2>&1 || { echo "[COVERAGE] verilator not on PATH; skipping"; exit 0; }
+	rm -rf $(COV_DIR_RB)
+	$(VERILATOR) --coverage -cc $(REGBLOCK_RTL) --top-module axi3lite_regblock \
+		--Mdir $(COV_DIR_RB) -Wno-DECLFILENAME -Wall -Wno-fatal
+	$(MAKE) -C $(COV_DIR_RB) -f Vaxi3lite_regblock.mk
+	g++ -DVM_COVERAGE=1 -o $(COV_DIR_RB)/sim_regblock \
+		sim_main_regblock.cpp $(COV_DIR_RB)/Vaxi3lite_regblock__ALL.a \
+		-I$(COV_DIR_RB) -I$(VERILATOR_INC) -I$(VERILATOR_INC)/vltstd \
+		$(VERILATOR_CPP) -pthread -lm
+	cd $(COV_DIR_RB) && ./sim_regblock
+	@if command -v verilator_coverage >/dev/null 2>&1; then \
+		verilator_coverage -write-info coverage_regblock.info $(COV_DIR_RB)/coverage.dat; \
+		echo "[COVERAGE] regblock: coverage_regblock.info written"; \
+	else \
+		echo "[COVERAGE] regblock: coverage.dat in $(COV_DIR_RB) (install verilator for lcov export)"; \
+	fi
+
+# UVM regblock targets (requires export UVM_HOME=...)
+uvm-vcs-regblock-hw-reset:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_regblock_hw_reset
+
+uvm-vcs-regblock-bit-bash:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_regblock_bit_bash
+
+uvm-vcs-regblock-reg-access:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_regblock_reg_access
+
+uvm-vcs-regblock-directed:
+	$(MAKE) -C $(CURDIR)/uvm/vcs sim_regblock_directed
+
 # formal: SymbiYosys formal proofs in verification/formal/.
 #         Proves APB4 handshake timing, mutual exclusion, BVALID/RVALID
 #         cleanup, BID/RID correctness, RLAST placement, and DECERR behavior
@@ -503,8 +548,11 @@ formal:
 
 # cocotb: Python-based OSS UVM-equivalent tests (Icarus + cocotb).
 #         Requires: pip install cocotb  (no VCS needed).
-cocotb:
+cocotb: cocotb-regblock
 	$(MAKE) -C $(CURDIR)/cocotb
+
+cocotb-regblock:
+	$(MAKE) -C $(CURDIR)/cocotb/regblock
 
 # ci: comprehensive local run — regress + coverage check + UVM mirror + cocotb.
 ci: regress coverage check-uvm-mirror cocotb
@@ -513,10 +561,10 @@ ci: regress coverage check-uvm-mirror cocotb
 .PHONY: regress coverage cov-report _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
 
 clean:
-	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress \
+	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \
 		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
-		coverage_simple.info coverage_burst.info $(COV_REPORT_HTML)
-	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST)
+		coverage_simple.info coverage_burst.info coverage_regblock.info $(COV_REPORT_HTML)
+	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB)
 	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/vcs clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/xcelium clean 2>/dev/null || true

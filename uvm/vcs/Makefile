@@ -19,7 +19,37 @@ RTL       = $(abspath ../../src)
 READ_WS ?= 2
 
 .PHONY: sim_simple sim_burst sim_burst_ext sim_simple_ws sim_parameterized \
-        sim_rand_burst sim_rand_integrity sim_stress clean
+        sim_rand_burst sim_rand_integrity sim_stress \
+        sim_regblock_hw_reset sim_regblock_bit_bash \
+        sim_regblock_reg_access sim_regblock_directed clean
+
+REGBLOCK_FILES = \
+  $(RTL)/axi3lite_regblock.v \
+  ../sv/interfaces/axi3lite_if.sv \
+  ../sv/pkg/regblock_stimulus_pkg.sv \
+  ../sv/pkg/regblock_uvm_env_pkg.sv \
+  ../sv/pkg/regblock_uvm_tests_pkg.sv \
+  ../tb/tb_uvm_regblock.sv
+
+sim_regblock_hw_reset:
+	$(VCS) $(VCS_FLAGS) $(UVM_SRC) $(IFDIR) $(REGBLOCK_FILES) \
+	  -o sim_regblock -top tb_uvm_regblock
+	./sim_regblock +UVM_TESTNAME=test_regblock_hw_reset -l sim_regblock_hw_reset.log
+
+sim_regblock_bit_bash:
+	$(VCS) $(VCS_FLAGS) $(UVM_SRC) $(IFDIR) $(REGBLOCK_FILES) \
+	  -o sim_regblock -top tb_uvm_regblock
+	./sim_regblock +UVM_TESTNAME=test_regblock_bit_bash -l sim_regblock_bit_bash.log
+
+sim_regblock_reg_access:
+	$(VCS) $(VCS_FLAGS) $(UVM_SRC) $(IFDIR) $(REGBLOCK_FILES) \
+	  -o sim_regblock -top tb_uvm_regblock
+	./sim_regblock +UVM_TESTNAME=test_regblock_reg_access -l sim_regblock_reg_access.log
+
+sim_regblock_directed:
+	$(VCS) $(VCS_FLAGS) $(UVM_SRC) $(IFDIR) $(REGBLOCK_FILES) \
+	  -o sim_regblock -top tb_uvm_regblock
+	./sim_regblock +UVM_TESTNAME=test_regblock_directed -l sim_regblock_directed.log
 
 sim_simple:
 	$(VCS) $(VCS_FLAGS) $(UVM_SRC) $(IFDIR) \
@@ -147,8 +177,9 @@ sim_stress:
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws sim_parameterized \
-	      sim_rand_burst sim_rand_integrity sim_stress
+	      sim_rand_burst sim_rand_integrity sim_stress sim_regblock
 	rm -f sim_simple.log sim_burst.log sim_burst_ext.log sim_simple_ws.log \
 	      sim_parameterized.log sim_rand_burst.log sim_rand_integrity.log \
-	      sim_stress.log
+	      sim_stress.log sim_regblock_hw_reset.log sim_regblock_bit_bash.log \
+	      sim_regblock_reg_access.log sim_regblock_directed.log
 	rm -rf csrc vc_hdrs.h ucli.key simv.daidir DVEfiles

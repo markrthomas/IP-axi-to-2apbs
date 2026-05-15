@@ -50,6 +50,7 @@ jobs:
           path: |
             coverage_simple.info
             coverage_burst.info
+            coverage_regblock.info
           if-no-files-found: ignore
 
   cocotb:
