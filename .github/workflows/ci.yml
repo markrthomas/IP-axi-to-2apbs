@@ -66,3 +66,16 @@ jobs:
 
       - name: cocotb OSS UVM-equivalent tests (simple + burst)
         run: make cocotb
+
+  formal:
+    needs: regress
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OSS CAD Suite (SymbiYosys + solvers)
+        uses: YosysHQ/setup-oss-cad-suite@v3
+
+      - name: Formal verification — simple bridge (depth 30) + burst bridge (depth 50)
+        working-directory: verification/formal
+        run: make all

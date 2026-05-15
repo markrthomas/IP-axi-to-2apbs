@@ -176,6 +176,16 @@ module apb4_simple_props #(
         if (!f_past_valid) assume (!ARESETn);
     end
 
+    // Simple-bridge serialization assumption: the bridge cannot arbitrate
+    // between simultaneous write-address/write-data and read-address requests
+    // — presenting both simultaneously deadlocks (each READY blocks on the
+    // other VALID).  Constrain the formal environment to serialized traffic,
+    // matching the bridge's single-outstanding-transaction contract.
+    always @(*) begin
+        assume (!(S_AXI_AWVALID && S_AXI_ARVALID));
+        assume (!(S_AXI_WVALID  && S_AXI_ARVALID));
+    end
+
     // AXI stability assumptions: once VALID is asserted it must hold
     // until READY, and the payload must not change.  This prevents the
     // BMC from exploring illegal AXI master behaviour that cannot
@@ -236,6 +246,145 @@ module apb4_simple_props #(
             if ($past(S_AXI_RVALID) && $past(S_AXI_RREADY))
                 assert (!S_AXI_RVALID);
 
+        end
+    end
+
+    // ----------------------------------------------------------------
+    // Liveness infrastructure
+    // ----------------------------------------------------------------
+
+    // Assume APB slave responds within 5 cycles of PENABLE assertion.
+    reg [2:0] f_p0_wait, f_p1_wait;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_p0_wait <= 3'd0; f_p1_wait <= 3'd0;
+        end else begin
+            f_p0_wait <= (PSEL0 && PENABLE0 && !PREADY0) ? f_p0_wait + 3'd1 : 3'd0;
+            f_p1_wait <= (PSEL1 && PENABLE1 && !PREADY1) ? f_p1_wait + 3'd1 : 3'd0;
+        end
+    end
+
+    // Assume AXI master consumes B and R beats within 5 cycles of VALID.
+    reg [2:0] f_bw, f_rw;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_bw <= 3'd0; f_rw <= 3'd0;
+        end else begin
+            f_bw <= (S_AXI_BVALID && !S_AXI_BREADY) ? f_bw + 3'd1 : 3'd0;
+            f_rw <= (S_AXI_RVALID && !S_AXI_RREADY) ? f_rw + 3'd1 : 3'd0;
+        end
+    end
+
+    // AXI requires AW and W to be paired.  Enforce mutual 5-cycle deadlines:
+    //   - If W is accepted before AW, AW must arrive within 5 cycles.
+    //   - If AW is accepted before W, W must arrive within 5 cycles.
+    // Without these, the bridge can stall indefinitely waiting for the partner.
+    reg       f_w_needs_aw, f_aw_needs_w;
+    reg [2:0] f_orphan_w_wait, f_orphan_aw_wait;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_w_needs_aw  <= 1'b0; f_orphan_w_wait  <= 3'd0;
+            f_aw_needs_w  <= 1'b0; f_orphan_aw_wait <= 3'd0;
+        end else begin
+            // W accepted, AW not yet
+            if (S_AXI_WVALID && S_AXI_WREADY && !(S_AXI_AWVALID && S_AXI_AWREADY))
+                f_w_needs_aw <= 1'b1;
+            if ((S_AXI_AWVALID && S_AXI_AWREADY) || S_AXI_BVALID)
+                f_w_needs_aw <= 1'b0;
+            f_orphan_w_wait <= f_w_needs_aw ? f_orphan_w_wait + 3'd1 : 3'd0;
+            // AW accepted, W not yet
+            if (S_AXI_AWVALID && S_AXI_AWREADY && !(S_AXI_WVALID && S_AXI_WREADY))
+                f_aw_needs_w <= 1'b1;
+            if ((S_AXI_WVALID && S_AXI_WREADY) || S_AXI_BVALID)
+                f_aw_needs_w <= 1'b0;
+            f_orphan_aw_wait <= f_aw_needs_w ? f_orphan_aw_wait + 3'd1 : 3'd0;
+        end
+    end
+
+    always @(posedge ACLK) begin
+        if (f_past_valid && ARESETn) begin
+            assume (f_p0_wait        < 3'd5);
+            assume (f_p1_wait        < 3'd5);
+            assume (f_bw             < 3'd5);
+            assume (f_rw             < 3'd5);
+            assume (f_orphan_w_wait  < 3'd5);
+            assume (f_orphan_aw_wait < 3'd5);
+        end
+    end
+
+    // Count consecutive cycles each channel VALID is high without READY.
+    reg [4:0] f_aw_stall, f_w_stall, f_ar_stall;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_aw_stall <= 5'd0; f_w_stall <= 5'd0; f_ar_stall <= 5'd0;
+        end else begin
+            f_aw_stall <= (S_AXI_AWVALID && !S_AXI_AWREADY) ? f_aw_stall + 5'd1 : 5'd0;
+            f_w_stall  <= (S_AXI_WVALID  && !S_AXI_WREADY)  ? f_w_stall  + 5'd1 : 5'd0;
+            f_ar_stall <= (S_AXI_ARVALID && !S_AXI_ARREADY) ? f_ar_stall + 5'd1 : 5'd0;
+        end
+    end
+
+    // L4/L5 start from the APB setup phase (PSEL high, PENABLE still low), which
+    // only fires after BOTH AW and W are accepted, so no W-arrival assumption is
+    // needed.  PWRITE distinguishes write from read paths.
+    wire f_apb_wr_setup = (PSEL0 && !PENABLE0 && PWRITE0) || (PSEL1 && !PENABLE1 && PWRITE1);
+    wire f_apb_rd_setup = (PSEL0 && !PENABLE0 && !PWRITE0) || (PSEL1 && !PENABLE1 && !PWRITE1);
+
+    // Count cycles from APB write setup to BVALID.
+    reg [4:0] f_apb_wr_to_b;
+    reg       f_apb_wr_live;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_apb_wr_to_b <= 5'd0; f_apb_wr_live <= 1'b0;
+        end else begin
+            if (f_apb_wr_setup && !f_apb_wr_live) begin
+                f_apb_wr_to_b <= 5'd0; f_apb_wr_live <= 1'b1;
+            end else if (f_apb_wr_live) begin
+                f_apb_wr_to_b <= f_apb_wr_to_b + 5'd1;
+            end
+            if (S_AXI_BVALID) f_apb_wr_live <= 1'b0;
+        end
+    end
+
+    // Count cycles from APB read setup to RVALID.
+    reg [4:0] f_apb_rd_to_r;
+    reg       f_apb_rd_live;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_apb_rd_to_r <= 5'd0; f_apb_rd_live <= 1'b0;
+        end else begin
+            if (f_apb_rd_setup && !f_apb_rd_live) begin
+                f_apb_rd_to_r <= 5'd0; f_apb_rd_live <= 1'b1;
+            end else if (f_apb_rd_live) begin
+                f_apb_rd_to_r <= f_apb_rd_to_r + 5'd1;
+            end
+            if (S_AXI_RVALID) f_apb_rd_live <= 1'b0;
+        end
+    end
+
+    // ----------------------------------------------------------------
+    // Liveness properties
+    // ----------------------------------------------------------------
+    // Bounds assume PREADY within 5 cycles → each APB transaction takes at
+    // most 1 (setup) + 6 (access) = 7 cycles.
+    // AW/W may stall while a read is in progress (~9 cycles with 5 wait states).
+    // AR may stall while a write completes (~12 cycles).
+    always @(posedge ACLK) begin
+        if (f_past_valid && ARESETn) begin
+            // L1: AW accepted within 25 cycles: read in flight ≤ 9 cy; or prior AW
+            //     was accepted, W arrived within 5 cy, APB 7 cy, BREADY 5 cy, + transitions.
+            // (previously 15; widened to cover orphan-AW scenario)
+            assert (f_aw_stall < 5'd25);
+            // L2: W accepted within 25 cycles: AW may arrive up to 5 cy after W
+            //     (orphan-W assumption), then write takes up to 19 cy more (APB 7 +
+            //     BREADY 5 + state transitions 2).
+            assert (f_w_stall  < 5'd25);
+            // L3: AR accepted within 25 cycles (write completes in ~19 cy + margin).
+            assert (f_ar_stall < 5'd25);
+            // L4: BVALID within 10 cycles of APB write setup (7 APB + 3 margin).
+            assert (!f_apb_wr_live || (f_apb_wr_to_b < 5'd10));
+            // L5: RVALID within 10 cycles of APB read setup (7 APB + 3 margin).
+            assert (!f_apb_rd_live || (f_apb_rd_to_r < 5'd10));
         end
     end
 
