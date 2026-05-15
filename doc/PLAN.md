@@ -1,6 +1,6 @@
 # Development Plan — IP-axi-to-2apbs
 
-**As of:** 2026-05-13
+**As of:** 2026-05-14
 
 ## Current baseline
 
@@ -10,16 +10,16 @@
 | Directed simulation | Icarus: simple, burst, burst-extended, wait-state (1–3), parameterized, stress |
 | Cocotb | 18 tests across simple (5) and burst (13) bridges; runs in CI |
 | UVM environment | Scoreboard, coverage collector, constrained-random sequences (`bridge_rand_seq`, `bridge_stress_seq`), VCS + Xcelium make targets |
-| Formal | SymbiYosys BMC + cover for both bridges (depth 30); all properties pass |
+| Formal | SymbiYosys BMC (simple depth 30, burst depth 50) + cover; safety + liveness; all 4 proofs pass; CI gated |
 | Coverage | Verilator C++ harnesses; 100% line; HTML report via `make cov-report`; exclusions documented in `doc/coverage_notes.md` |
-| CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` in parallel; coverage `.info` uploaded as artifact |
+| CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact |
 | Documentation | `design_contract.md`, `stress_test.md`, `coverage_notes.md`, UVM READMEs, PDF targets |
 
 ---
 
 ## Near-term
 
-### 1 — Formal: liveness properties and deeper proof
+### ~~1 — Formal: liveness properties and deeper proof~~ ✓ DONE 2026-05-14
 
 **What:** The existing BMC proofs establish safety (nothing wrong happens) but
 not liveness (transactions always complete). A deadlock taking more than 30
