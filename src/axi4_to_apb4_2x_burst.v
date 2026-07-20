@@ -94,6 +94,7 @@ module axi4_to_apb4_2x_burst #(
     reg                          txn_decerr;
     reg                          pslverr_acc;
     reg                          wlast_err;
+    reg                          w_done;      // write-data phase terminated (WLAST seen or beat count reached)
 
     reg [DATA_WIDTH-1:0]         rdata_fifo;
     reg [1:0]                    rresp_fifo;
@@ -124,7 +125,7 @@ module axi4_to_apb4_2x_burst #(
     always @(*) begin
         S_AXI_AWREADY = idle_for_new && !S_AXI_ARVALID;
         S_AXI_ARREADY = idle_for_new && !S_AXI_AWVALID;
-        if (txn_active && axi_is_write && (beat_index < beats_total)) begin
+        if (txn_active && axi_is_write && !w_done && (beat_index < beats_total)) begin
             if (txn_decerr) S_AXI_WREADY = 1'b1;
             else            S_AXI_WREADY = (apb_state == APB_IDLE);
         end else begin
@@ -145,6 +146,7 @@ module axi4_to_apb4_2x_burst #(
             txn_decerr  <= 1'b0;
             pslverr_acc <= 1'b0;
             wlast_err   <= 1'b0;
+            w_done      <= 1'b0;
             rfifo_valid <= 1'b0;
         end else begin
             if (aw_handshake) begin
@@ -162,6 +164,7 @@ module axi4_to_apb4_2x_burst #(
                 txn_decerr    <= aw_param_err;
                 pslverr_acc   <= 1'b0;
                 wlast_err     <= 1'b0;
+                w_done        <= 1'b0;
             end else if (ar_handshake) begin
                 axi_id_reg    <= S_AXI_ARID;
                 axi_addr_reg  <= S_AXI_ARADDR;
@@ -177,11 +180,18 @@ module axi4_to_apb4_2x_burst #(
                 txn_decerr    <= ar_param_err;
                 pslverr_acc   <= 1'b0;
                 wlast_err     <= 1'b0;
+                w_done        <= 1'b0;
                 rfifo_valid   <= 1'b0;
             end
 
             if (w_handshake && txn_active && axi_is_write) begin
+                // Flag malformed WLAST: asserted too early, or missing on the final beat.
                 if (S_AXI_WLAST != (beat_index == beats_total - 1)) wlast_err <= 1'b1;
+                // Terminate the write-data phase when the master asserts WLAST (the
+                // authoritative end of the burst) or when the expected beat count is
+                // reached even if WLAST never arrives.  This prevents a deadlock when a
+                // compliant master stops driving W after a premature WLAST.
+                if (S_AXI_WLAST || (beat_index == beats_total - 1)) w_done <= 1'b1;
                 if (txn_decerr) beat_index <= beat_index + 1;
             end
 
@@ -262,7 +272,7 @@ module axi4_to_apb4_2x_burst #(
             S_AXI_BRESP  <= 2'b00;
         end else begin
             if (S_AXI_BVALID && S_AXI_BREADY) S_AXI_BVALID <= 1'b0;
-            else if (txn_active && axi_is_write && (beat_index == beats_total) && (apb_state == APB_IDLE) && !S_AXI_BVALID) begin
+            else if (txn_active && axi_is_write && w_done && (apb_state == APB_IDLE) && !S_AXI_BVALID) begin
                 S_AXI_BID    <= axi_id_reg;
                 S_AXI_BRESP  <= txn_decerr ? 2'b11 : (pslverr_acc || wlast_err ? 2'b10 : 2'b00);
                 S_AXI_BVALID <= 1'b1;

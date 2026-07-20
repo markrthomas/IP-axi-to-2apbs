@@ -13,7 +13,8 @@ Key behaviors under test:
 import cocotb
 from cocotb.clock import Clock
 
-from env import AXI4Driver, BRESP_OKAY, BRESP_DECERR, RRESP_OKAY, reset_dut, start_slaves
+from env import (AXI4Driver, BRESP_OKAY, BRESP_SLVERR, BRESP_DECERR, RRESP_OKAY,
+                 reset_dut, start_slaves)
 
 
 @cocotb.test()
@@ -333,3 +334,32 @@ async def test_wait_state_burst(dut):
     read_beats = await axi.burst_read(BASE, 4)
     for i, (got, expected) in enumerate(zip(read_beats, BEATS)):
         assert got == expected, f"WS burst beat {i}: 0x{got:016x} != 0x{expected:016x}"
+
+
+@cocotb.test()
+async def test_premature_wlast_no_deadlock(dut):
+    """Compliant master asserts WLAST early (beat 0 of a 4-beat write) and stops.
+    The bridge must not deadlock: it must return a single SLVERR write response."""
+    clk = dut.ACLK
+    cocotb.start_soon(Clock(clk, 10, units="ns").start())
+    await reset_dut(dut, clk)
+    start_slaves(dut, clk)
+
+    axi = AXI4Driver(dut, clk)
+    bresp = await axi.burst_write_wlast_at(0x0000_0900, awlen=3, wlast_at=0)
+    assert bresp == BRESP_SLVERR, f"Premature-WLAST BRESP: {bresp} (expected SLVERR)"
+
+
+@cocotb.test()
+async def test_missing_wlast_no_deadlock(dut):
+    """Compliant master sends the full beat count but never asserts WLAST.
+    The bridge must complete on the beat count and flag SLVERR, not hang."""
+    clk = dut.ACLK
+    cocotb.start_soon(Clock(clk, 10, units="ns").start())
+    await reset_dut(dut, clk)
+    start_slaves(dut, clk)
+
+    axi = AXI4Driver(dut, clk)
+    # awlen=1 => 2 beats expected; wlast_at=99 => WLAST never asserted.
+    bresp = await axi.burst_write_wlast_at(0x0000_0A00, awlen=1, wlast_at=99)
+    assert bresp == BRESP_SLVERR, f"Missing-WLAST BRESP: {bresp} (expected SLVERR)"

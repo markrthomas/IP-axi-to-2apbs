@@ -103,6 +103,10 @@ module tb_repro_issues;
       while (!S_AXI_WREADY) @(posedge ACLK);
       @(posedge ACLK);
       S_AXI_WVALID <= 0; S_AXI_WLAST <= 0; PSLVERR0 <= 0; PSLVERR1 <= 0;
+      // Compliant AXI master: the write-data phase ends at WLAST.  For a premature
+      // WLAST (wlast_at < len) this stops sending further beats, exercising the
+      // bridge's WLAST-terminated completion instead of masking a deadlock.
+      if (i == wlast_at) i = len + 1;
     end
     while (!S_AXI_BVALID) @(posedge ACLK);
     resp = S_AXI_BRESP;

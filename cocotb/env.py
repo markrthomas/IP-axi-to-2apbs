@@ -157,6 +157,58 @@ class AXI4Driver:
                 return int(dut.S_AXI_BRESP.value)
         raise AssertionError(f"Timeout waiting for BVALID (burst, addr=0x{addr:08x})")
 
+    async def burst_write_wlast_at(self, addr, awlen, wlast_at, awid=0, strb=0xFF,
+                                   burst_type=0b01):
+        """Drive a write of AWLEN+1 beats but assert WLAST at beat `wlast_at` and
+        then stop driving W, modelling a compliant master whose write-data phase
+        ends at WLAST.  Used to exercise premature WLAST (wlast_at < awlen) without
+        deadlocking.  Returns BRESP."""
+        dut    = self.dut
+        clk    = self.clk
+
+        dut.S_AXI_AWID.value    = awid
+        dut.S_AXI_AWADDR.value  = addr
+        dut.S_AXI_AWLEN.value   = awlen
+        dut.S_AXI_AWSIZE.value  = 0b011
+        dut.S_AXI_AWBURST.value = burst_type
+        dut.S_AXI_AWPROT.value  = 0
+        dut.S_AXI_AWVALID.value = 1
+        dut.S_AXI_BREADY.value  = 1
+
+        for _ in range(64):
+            await RisingEdge(clk)
+            if int(dut.S_AXI_AWREADY.value) == 1:
+                dut.S_AXI_AWVALID.value = 0
+                break
+        else:
+            raise AssertionError(f"Timeout on AW handshake (addr=0x{addr:08x})")
+
+        # A compliant master never drives more than AWLEN+1 beats.  If wlast_at
+        # exceeds awlen (the "missing WLAST" case) it simply sends the full count
+        # with WLAST never asserted and then stops.
+        last_beat = min(wlast_at, awlen)
+        for i in range(last_beat + 1):
+            dut.S_AXI_WDATA.value  = 0xA0 + i
+            dut.S_AXI_WSTRB.value  = strb
+            dut.S_AXI_WLAST.value  = 1 if i == wlast_at else 0
+            dut.S_AXI_WVALID.value = 1
+            for _ in range(64):
+                await RisingEdge(clk)
+                if int(dut.S_AXI_WREADY.value) == 1:
+                    break
+            else:
+                raise AssertionError(f"Timeout on W beat {i} (addr=0x{addr:08x})")
+        dut.S_AXI_WVALID.value = 0
+        dut.S_AXI_WLAST.value  = 0
+
+        for _ in range(64):
+            await RisingEdge(clk)
+            if int(dut.S_AXI_BVALID.value) == 1:
+                return int(dut.S_AXI_BRESP.value)
+        raise AssertionError(
+            f"DEADLOCK: no BVALID after WLAST@{wlast_at} of {awlen+1}-beat write "
+            f"(addr=0x{addr:08x})")
+
     async def burst_read(self, addr, length, arid=0, burst_type=0b01):
         """Drive a multi-beat AXI read.  burst_type: 0=FIXED, 1=INCR (default)."""
         dut = self.dut
