@@ -598,7 +598,8 @@ cocotb-regblock:
 	$(MAKE) -C $(CURDIR)/cocotb/regblock
 
 # --- PyUVM testbench targets -------------------------------------------------
-PYUVM_WAVE_FST := $(CURDIR)/cocotb/pyuvm_waves/sim_build/axi4_to_apb4_2x_burst.fst
+PYUVM_WAVE_FST  := $(CURDIR)/cocotb/pyuvm_waves/sim_build/axi4_to_apb4_2x_burst.fst
+PYUVM_WAVE_GTKW := $(CURDIR)/cocotb/pyuvm_waves/pyuvm_burst.gtkw
 
 # pyuvm: run the PyUVM burst testbench (directed + constrained-random).
 pyuvm:
@@ -610,10 +611,11 @@ pyuvm-waves:
 	$(MAKE) -C $(CURDIR)/cocotb/pyuvm_waves WAVES=1
 	@echo "[PYUVM] wave written: $(PYUVM_WAVE_FST)"
 
-# pyuvm-wave-view: (re)generate the randomized trace and open it in GTKWave.
+# pyuvm-wave-view: (re)generate the randomized trace and open it in GTKWave
+#                  with the grouped-signal save file (pyuvm_burst.gtkw).
 pyuvm-wave-view: pyuvm-waves
-	@command -v $(GTKWAVE) >/dev/null 2>&1 || { echo "[PYUVM] $(GTKWAVE) not on PATH; open $(PYUVM_WAVE_FST) manually"; exit 0; }
-	$(GTKWAVE) $(GTKWAVE_FLAGS) $(PYUVM_WAVE_FST) >/dev/null 2>&1 &
+	@command -v $(GTKWAVE) >/dev/null 2>&1 || { echo "[PYUVM] $(GTKWAVE) not on PATH; open $(PYUVM_WAVE_FST) with $(PYUVM_WAVE_GTKW)"; exit 0; }
+	$(GTKWAVE) $(GTKWAVE_FLAGS) $(PYUVM_WAVE_FST) $(PYUVM_WAVE_GTKW) >/dev/null 2>&1 &
 
 # ci: comprehensive local run — regress + coverage check + UVM mirror + cocotb.
 ci: regress coverage check-uvm-mirror cocotb

@@ -1,0 +1,133 @@
+[*]
+[*] GTKWave save file for the PyUVM burst testbench (axi4_to_apb4_2x_burst).
+[*] Loaded automatically by:  make pyuvm-wave-view
+[*] Signals are organised into collapsible groups per AXI/APB channel plus the
+[*] bridge's internal state.  Buses default to hex.  Regenerate the trace with
+[*] `make pyuvm-waves` (optionally PYUVM_SEED=<n>) before viewing.
+[*]
+[dumpfile] "sim_build/axi4_to_apb4_2x_burst.fst"
+[savefile] "pyuvm_burst.gtkw"
+[timestart] 0
+[size] 1400 900
+[pos] -1 -1
+*-24.000000 0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] axi4_to_apb4_2x_burst.
+[sst_width] 260
+[signals_width] 300
+[sst_expanded] 1
+[sst_vpaned_height] 200
+@28
+axi4_to_apb4_2x_burst.ACLK
+axi4_to_apb4_2x_burst.ARESETn
+@800022
+-AXI Write Address
+@28
+axi4_to_apb4_2x_burst.S_AXI_AWVALID
+axi4_to_apb4_2x_burst.S_AXI_AWREADY
+@22
+axi4_to_apb4_2x_burst.S_AXI_AWID[3:0]
+axi4_to_apb4_2x_burst.S_AXI_AWADDR[31:0]
+axi4_to_apb4_2x_burst.S_AXI_AWLEN[7:0]
+axi4_to_apb4_2x_burst.S_AXI_AWSIZE[2:0]
+axi4_to_apb4_2x_burst.S_AXI_AWBURST[1:0]
+axi4_to_apb4_2x_burst.S_AXI_AWPROT[2:0]
+@1401200
+-AXI Write Address
+@800022
+-AXI Write Data
+@28
+axi4_to_apb4_2x_burst.S_AXI_WVALID
+axi4_to_apb4_2x_burst.S_AXI_WREADY
+axi4_to_apb4_2x_burst.S_AXI_WLAST
+@22
+axi4_to_apb4_2x_burst.S_AXI_WDATA[63:0]
+axi4_to_apb4_2x_burst.S_AXI_WSTRB[7:0]
+@1401200
+-AXI Write Data
+@800022
+-AXI Write Response
+@28
+axi4_to_apb4_2x_burst.S_AXI_BVALID
+axi4_to_apb4_2x_burst.S_AXI_BREADY
+@22
+axi4_to_apb4_2x_burst.S_AXI_BID[3:0]
+axi4_to_apb4_2x_burst.S_AXI_BRESP[1:0]
+@1401200
+-AXI Write Response
+@800022
+-AXI Read Address
+@28
+axi4_to_apb4_2x_burst.S_AXI_ARVALID
+axi4_to_apb4_2x_burst.S_AXI_ARREADY
+@22
+axi4_to_apb4_2x_burst.S_AXI_ARID[3:0]
+axi4_to_apb4_2x_burst.S_AXI_ARADDR[31:0]
+axi4_to_apb4_2x_burst.S_AXI_ARLEN[7:0]
+axi4_to_apb4_2x_burst.S_AXI_ARSIZE[2:0]
+axi4_to_apb4_2x_burst.S_AXI_ARBURST[1:0]
+axi4_to_apb4_2x_burst.S_AXI_ARPROT[2:0]
+@1401200
+-AXI Read Address
+@800022
+-AXI Read Data
+@28
+axi4_to_apb4_2x_burst.S_AXI_RVALID
+axi4_to_apb4_2x_burst.S_AXI_RREADY
+axi4_to_apb4_2x_burst.S_AXI_RLAST
+@22
+axi4_to_apb4_2x_burst.S_AXI_RID[3:0]
+axi4_to_apb4_2x_burst.S_AXI_RDATA[63:0]
+axi4_to_apb4_2x_burst.S_AXI_RRESP[1:0]
+@1401200
+-AXI Read Data
+@800022
+-APB0 Port
+@28
+axi4_to_apb4_2x_burst.PSEL0
+axi4_to_apb4_2x_burst.PENABLE0
+axi4_to_apb4_2x_burst.PWRITE0
+axi4_to_apb4_2x_burst.PREADY0
+axi4_to_apb4_2x_burst.PSLVERR0
+@22
+axi4_to_apb4_2x_burst.PADDR0[31:0]
+axi4_to_apb4_2x_burst.PWDATA0[63:0]
+axi4_to_apb4_2x_burst.PRDATA0[63:0]
+axi4_to_apb4_2x_burst.PSTRB0[7:0]
+axi4_to_apb4_2x_burst.PPROT0[2:0]
+@1401200
+-APB0 Port
+@800022
+-APB1 Port
+@28
+axi4_to_apb4_2x_burst.PSEL1
+axi4_to_apb4_2x_burst.PENABLE1
+axi4_to_apb4_2x_burst.PWRITE1
+axi4_to_apb4_2x_burst.PREADY1
+axi4_to_apb4_2x_burst.PSLVERR1
+@22
+axi4_to_apb4_2x_burst.PADDR1[31:0]
+axi4_to_apb4_2x_burst.PWDATA1[63:0]
+axi4_to_apb4_2x_burst.PRDATA1[63:0]
+axi4_to_apb4_2x_burst.PSTRB1[7:0]
+axi4_to_apb4_2x_burst.PPROT1[2:0]
+@1401200
+-APB1 Port
+@800022
+-Bridge State
+@28
+axi4_to_apb4_2x_burst.txn_active
+axi4_to_apb4_2x_burst.axi_is_write
+axi4_to_apb4_2x_burst.axi_sel_apb1
+axi4_to_apb4_2x_burst.w_done
+axi4_to_apb4_2x_burst.wlast_err
+axi4_to_apb4_2x_burst.txn_decerr
+axi4_to_apb4_2x_burst.pslverr_acc
+@22
+axi4_to_apb4_2x_burst.apb_state[1:0]
+axi4_to_apb4_2x_burst.beat_index[8:0]
+axi4_to_apb4_2x_burst.beats_total[8:0]
+axi4_to_apb4_2x_burst.axi_addr_reg[31:0]
+@1401200
+-Bridge State
+[pattern_trace] 1
+[pattern_trace] 0
