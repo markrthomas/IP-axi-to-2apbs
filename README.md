@@ -2,6 +2,40 @@
 
 IP AXI to 2× APB4 bridge RTL and self-checking testbenches.
 
+## Architecture
+
+The bridge is a restricted AXI4 slave that serializes one AXI transaction at a
+time into APB4 transfers on one of two APB master ports. Address bit 31 selects
+the port, carving the 32-bit space into two 2 GiB windows. Unsupported burst
+parameters or a burst that would cross the port boundary are rejected with
+`DECERR`; `PSLVERR` or a malformed `WLAST` map to `SLVERR`.
+
+```mermaid
+flowchart LR
+    M["AXI4 master"]
+
+    subgraph BR["axi4_to_apb4_2x_burst — single outstanding transaction"]
+        direction TB
+        AXI["AXI4 slave port<br/>AW · W · B · AR · R"]
+        DEC["Address decode + parameter checks<br/>addr[31] port select<br/>AxSIZE / AxBURST / window-cross → DECERR"]
+        SEQ["APB sequencer<br/>beat → APB transfer<br/>setup / access / wait (PREADY)"]
+        RSP["Response policy<br/>OKAY · SLVERR (PSLVERR / bad WLAST) · DECERR"]
+        AXI --> DEC --> SEQ --> RSP --> AXI
+    end
+
+    P0["APB0 master<br/>0x0000_0000 – 0x7FFF_FFFF"]
+    P1["APB1 master<br/>0x8000_0000 – 0xFFFF_FFFF"]
+
+    M -->|"AW · W · AR"| AXI
+    AXI -->|"B · R"| M
+    SEQ -->|"addr[31] = 0"| P0
+    SEQ -->|"addr[31] = 1"| P1
+```
+
+Two RTL variants live in `src/`: `axi4_to_apb4_2x_simple` (single-beat) and
+`axi4_to_apb4_2x_burst` (restricted `INCR`/`FIXED` bursts). The full target
+behavior is specified in [`doc/design_contract.md`](doc/design_contract.md).
+
 ## Directory layout
 
 - `src/` - canonical RTL entrypoints for the bridges
@@ -14,6 +48,22 @@ IP AXI to 2× APB4 bridge RTL and self-checking testbenches.
 The target behavior for a fully functional bridge is defined in
 [`doc/design_contract.md`](doc/design_contract.md). Use that document as the
 reference for RTL completion, verification scope, and integration assumptions.
+
+## Verification &amp; reporting
+
+Beyond the Icarus directed testbenches, several OSS verification and reporting
+flows run from the repo root (each degrades gracefully if its tool is absent):
+
+| Flow | Command | What it does |
+|------|---------|--------------|
+| cocotb (Python) | `make cocotb` | UVM-equivalent directed tests for the simple, burst, and regblock DUTs. |
+| PyUVM testbench | `make pyuvm` | Full pyUVM hierarchy (sequencer / driver / scoreboard) over the burst bridge. |
+| PyUVM waves | `make pyuvm-waves` / `make pyuvm-wave-view` | Randomized, seed-controlled run that dumps an FST and opens it in GTKWave with a grouped [save file](cocotb/pyuvm_waves/pyuvm_burst.gtkw). |
+| Formal | `make formal` | SymbiYosys BMC + cover (safety + liveness) proofs. |
+| Coverage | `make cov-report` / `make cov-html` | Verilator line/branch coverage → terminal table + self-contained HTML report. |
+| Performance | `make perf` / `make perf-html` | Benchmarks the burst bridge and reports simulation speed and design cycles-per-beat / sustained bandwidth. |
+
+Reproduce a specific random wave trace with `PYUVM_SEED=<n> make pyuvm-waves`.
 
 ## Xcelium Tutorial
 
