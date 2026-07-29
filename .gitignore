@@ -2,8 +2,14 @@ sim_simple
 sim_burst
 obj_dir_cov_simple/
 obj_dir_cov_burst/
+obj_dir_cov_regblock/
+obj_dir_perf/
 coverage_simple.info
 coverage_burst.info
+coverage_regblock.info
+coverage_report.html
+perf_report.html
+perf_metrics.txt
 sim_burst_ext
 sim_simple_ws_*
 sim_param

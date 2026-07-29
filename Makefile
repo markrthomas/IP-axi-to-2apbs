@@ -168,8 +168,14 @@ help:
 	@echo ""
 	@echo "  Coverage:"
 	@echo "    make cov-report                   # build + run + terminal table + coverage_report.html"
+	@echo "    make cov-html                     # cov-report, then open the HTML in a browser"
 	@echo "    COV_REPORT_HTML=my.html make cov-report"
 	@echo "    make coverage                     # build + run only (produces .info files)"
+	@echo ""
+	@echo "  Performance:"
+	@echo "    make perf                         # benchmark burst bridge + terminal table + perf_report.html"
+	@echo "    make perf-html                    # perf, then open the HTML in a browser"
+	@echo "    PERF_ITERS=20000 make perf        # larger workload for a steadier timing sample"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
@@ -455,6 +461,12 @@ regress: _lint_iverilog _lint_verilator test-all
 
 COV_REPORT_HTML ?= coverage_report.html
 
+# Performance benchmark (optimized Verilator model of the burst bridge).
+PERF_DIR         := obj_dir_perf
+PERF_REPORT_HTML ?= perf_report.html
+PERF_METRICS     ?= perf_metrics.txt
+PERF_ITERS       ?= 4000
+
 # coverage: Verilator --coverage for all three RTL blocks.
 coverage: _cov_simple _cov_burst _cov_regblock
 	@echo "[COVERAGE] Done. Wrote coverage_simple.info, coverage_burst.info, coverage_regblock.info."
@@ -465,6 +477,31 @@ cov-report: coverage
 		--root $(CURDIR) \
 		--out $(COV_REPORT_HTML) \
 		coverage_simple.info coverage_burst.info coverage_regblock.info
+
+# cov-html: build the coverage HTML report and open it in a browser.
+cov-html: cov-report
+	bash $(CURDIR)/scripts/open_report.sh $(COV_REPORT_HTML)
+
+# perf: build an optimized Verilator model of the burst bridge, run the
+#       benchmark workload, and render a terminal + self-contained HTML report
+#       (simulation speed + design cycles-per-beat / sustained bandwidth).
+#       Override the workload size with:  PERF_ITERS=20000 make perf
+perf:
+	@command -v $(VERILATOR) >/dev/null 2>&1 || { echo "[PERF] verilator not on PATH; skipping"; exit 0; }
+	rm -rf $(PERF_DIR)
+	$(VERILATOR) -cc $(BURST_RTL) --top-module axi4_to_apb4_2x_burst \
+		--Mdir $(PERF_DIR) -Wno-DECLFILENAME -Wall -Wno-fatal -O3 -CFLAGS -O2
+	$(MAKE) -C $(PERF_DIR) -f Vaxi4_to_apb4_2x_burst.mk
+	g++ -O2 -o $(PERF_DIR)/sim_perf \
+		sim_main_perf.cpp $(PERF_DIR)/Vaxi4_to_apb4_2x_burst__ALL.a \
+		-I$(PERF_DIR) -I$(VERILATOR_INC) -I$(VERILATOR_INC)/vltstd \
+		$(VERILATOR_CPP) -pthread -lm
+	$(PERF_DIR)/sim_perf $(PERF_ITERS) | tee $(PERF_METRICS)
+	python3 $(CURDIR)/scripts/perf_report.py $(PERF_METRICS) --out $(PERF_REPORT_HTML)
+
+# perf-html: run the performance benchmark and open the HTML report in a browser.
+perf-html: perf
+	bash $(CURDIR)/scripts/open_report.sh $(PERF_REPORT_HTML)
 
 _cov_simple:
 	@command -v $(VERILATOR) >/dev/null 2>&1 || { echo "[COVERAGE] verilator not on PATH; skipping"; exit 0; }
@@ -558,13 +595,14 @@ cocotb-regblock:
 ci: regress coverage check-uvm-mirror cocotb
 	@echo "[CI] All gates passed."
 
-.PHONY: regress coverage cov-report _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
+.PHONY: regress coverage cov-report cov-html perf perf-html _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \
 		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
-		coverage_simple.info coverage_burst.info coverage_regblock.info $(COV_REPORT_HTML)
-	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB)
+		coverage_simple.info coverage_burst.info coverage_regblock.info $(COV_REPORT_HTML) \
+		$(PERF_REPORT_HTML) $(PERF_METRICS)
+	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB) $(PERF_DIR)
 	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/vcs clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/xcelium clean 2>/dev/null || true
