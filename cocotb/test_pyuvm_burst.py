@@ -45,13 +45,17 @@ class AxiTxn(uvm_sequence_item):
     ``n_beats`` says how many beats to fetch and ``rdata`` receives them."""
 
     def __init__(self, name="AxiTxn", is_write=True, addr=0, data=None,
-                 n_beats=1, burst_type=INCR):
+                 n_beats=1, burst_type=INCR, wlast_at=None):
         super().__init__(name)
         self.is_write   = is_write
         self.addr       = addr
         self.data       = list(data) if data else []
         self.n_beats    = len(self.data) if self.data else n_beats
         self.burst_type = burst_type
+        # wlast_at: if set on a write, the driver asserts WLAST at that beat and
+        # then stops (compliant-master premature/missing WLAST) instead of a
+        # normal full-length burst.  Left None for ordinary transfers.
+        self.wlast_at   = wlast_at
         # Results filled in by the driver:
         self.resp  = None
         self.rdata = []
@@ -59,7 +63,8 @@ class AxiTxn(uvm_sequence_item):
     def __str__(self):
         kind = "WR" if self.is_write else "RD"
         bt   = "FIXED" if self.burst_type == FIXED else "INCR"
-        return (f"{kind} addr=0x{self.addr:08x} beats={self.n_beats} {bt} "
+        wl   = "" if self.wlast_at is None else f" wlast@{self.wlast_at}"
+        return (f"{kind} addr=0x{self.addr:08x} beats={self.n_beats} {bt}{wl} "
                 f"resp={self.resp}")
 
 
@@ -77,7 +82,11 @@ class AxiDriver(uvm_driver):
         axi = AXI4Driver(self.dut, self.dut.ACLK)
         while True:
             txn = await self.seq_item_port.get_next_item()
-            if txn.is_write:
+            if txn.is_write and txn.wlast_at is not None:
+                txn.resp = await axi.burst_write_wlast_at(
+                    txn.addr, awlen=txn.n_beats - 1, wlast_at=txn.wlast_at,
+                    burst_type=txn.burst_type)
+            elif txn.is_write:
                 txn.resp = await axi.burst_write(
                     txn.addr, txn.data, burst_type=txn.burst_type)
             else:

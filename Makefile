@@ -177,6 +177,12 @@ help:
 	@echo "    make perf-html                    # perf, then open the HTML in a browser"
 	@echo "    PERF_ITERS=20000 make perf        # larger workload for a steadier timing sample"
 	@echo ""
+	@echo "  PyUVM:"
+	@echo "    make pyuvm                        # run the PyUVM burst testbench (directed + random)"
+	@echo "    make pyuvm-waves                  # randomized PyUVM run, dump FST for GTKWave"
+	@echo "    make pyuvm-wave-view              # pyuvm-waves, then open the trace in GTKWave"
+	@echo "    PYUVM_SEED=<n> make pyuvm-waves   # reproduce a specific random trace"
+	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
 # --- tests -------------------------------------------------------------------
@@ -591,11 +597,29 @@ cocotb: cocotb-regblock
 cocotb-regblock:
 	$(MAKE) -C $(CURDIR)/cocotb/regblock
 
+# --- PyUVM testbench targets -------------------------------------------------
+PYUVM_WAVE_FST := $(CURDIR)/cocotb/pyuvm_waves/sim_build/axi4_to_apb4_2x_burst.fst
+
+# pyuvm: run the PyUVM burst testbench (directed + constrained-random).
+pyuvm:
+	$(MAKE) -C $(CURDIR)/cocotb/pyuvm_burst
+
+# pyuvm-waves: run the randomized PyUVM test with waveform capture (FST).
+#              Reproduce a specific trace with:  PYUVM_SEED=<n> make pyuvm-waves
+pyuvm-waves:
+	$(MAKE) -C $(CURDIR)/cocotb/pyuvm_waves WAVES=1
+	@echo "[PYUVM] wave written: $(PYUVM_WAVE_FST)"
+
+# pyuvm-wave-view: (re)generate the randomized trace and open it in GTKWave.
+pyuvm-wave-view: pyuvm-waves
+	@command -v $(GTKWAVE) >/dev/null 2>&1 || { echo "[PYUVM] $(GTKWAVE) not on PATH; open $(PYUVM_WAVE_FST) manually"; exit 0; }
+	$(GTKWAVE) $(GTKWAVE_FLAGS) $(PYUVM_WAVE_FST) >/dev/null 2>&1 &
+
 # ci: comprehensive local run — regress + coverage check + UVM mirror + cocotb.
 ci: regress coverage check-uvm-mirror cocotb
 	@echo "[CI] All gates passed."
 
-.PHONY: regress coverage cov-report cov-html perf perf-html _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
+.PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \

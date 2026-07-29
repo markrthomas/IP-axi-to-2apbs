@@ -15,3 +15,4 @@ clean:
 	$(MAKE) -C simple clean
 	$(MAKE) -C burst clean
 	$(MAKE) -C pyuvm_burst clean
+	$(MAKE) -C pyuvm_waves clean
