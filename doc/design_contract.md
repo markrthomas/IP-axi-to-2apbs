@@ -69,6 +69,14 @@ The final implementation must detect early or missing `WLAST`. The response
 policy for malformed `WLAST` is `SLVERR` unless the address/control phase was
 already a decode error, in which case `DECERR` takes priority.
 
+The write-data phase terminates on `WLAST` (the authoritative end of the burst)
+rather than purely on the expected beat count. A compliant master stops driving
+`W` after asserting `WLAST`; a premature `WLAST` must therefore complete the
+transaction with a single `SLVERR` response and must not leave `WREADY` parked
+waiting for beats the master will never send. If `WLAST` is missing entirely,
+the phase still terminates once `AWLEN + 1` beats have been accepted, again with
+`SLVERR`.
+
 ### Write Response Channel
 
 The bridge returns one `BVALID` response per accepted write transaction.
@@ -185,7 +193,21 @@ The repository currently contains:
 - `axi4_to_apb4_2x_burst`: initial restricted-burst bridge with parameter
   checks for size, burst type, and `addr[31]` crossing.
 
-The current burst RTL is a starting point for this contract, not yet the final
-contract-complete implementation. The remaining gaps include stronger `WLAST`
-checking, broader wait-state/error verification, response stability assertions,
-and cleanup of canonical source layout.
+The burst RTL is now contract-complete for the fixed-width (`ADDR_WIDTH == 32`,
+`DATA_WIDTH == 64`) scope:
+
+- `WLAST` handling terminates the write-data phase on `WLAST` and flags premature
+  or missing `WLAST` as `SLVERR` without deadlocking a compliant master (verified
+  by directed `tb_axi4_to_apb4_2x_burst_extended.v`, cocotb
+  `test_premature_wlast_no_deadlock` / `test_missing_wlast_no_deadlock`, and the
+  randomized stress bench).
+- Wait states on reads and writes, `PSLVERR` accumulation, `DECERR` on
+  unsupported parameters and `addr[31]` crossing, and response stability while
+  `xVALID && !xREADY` are exercised across the directed, cocotb, and stress
+  suites.
+
+Verification split: SymbiYosys formal (BMC depth 50 + cover, safety + liveness)
+proves the compliant-`WLAST` space exhaustively; the malformed-`WLAST`
+error/edge behavior is covered by directed and constrained-random simulation.
+Remaining future work (parameterized data width, APB3 compatibility, synthesis
+flow) is tracked in `doc/PLAN.md`.
