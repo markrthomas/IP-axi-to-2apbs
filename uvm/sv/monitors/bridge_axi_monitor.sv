@@ -14,6 +14,11 @@ class bridge_axi_monitor #(int DW = 64) extends uvm_component;
   uvm_analysis_port #(bridge_axi_wr_tr) ap_wr;
   uvm_analysis_port #(bridge_axi_rd_tr) ap_rd;
 
+  // Decoupled write-channel capture queues (see wr_aw/w/b_capture): AW
+  // descriptors and completed W data-bursts awaiting their B response.
+  bridge_axi_wr_tr aw_pend[$];
+  bridge_axi_wr_tr wd_pend[$];
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
     ap_wr = new("ap_wr", this);
@@ -39,38 +44,67 @@ class bridge_axi_monitor #(int DW = 64) extends uvm_component;
     return {{(8 - (DW / 8)) {1'b0}}, sin};
   endfunction
 
-  task wr_loop;
+  // The write side captures each AXI channel (AW / W / B) in its own always-
+  // armed process and reassembles a transaction at the B response.  A single
+  // blocking AW->W->B->restart loop can miss a channel event that occurs while
+  // it is blocked on another channel — an ordering that VCS and Verilator's
+  // --timing scheduler resolve differently — so decoupling keeps the monitor
+  // correct on both.  The bridge is single-outstanding, so the pending queues
+  // hold at most one entry and in-order pairing is exact.
+
+  task wr_aw_capture;
+    forever begin
+      bridge_axi_wr_tr d;
+      @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_AWVALID && vif.S_AXI_AWREADY));
+      d = bridge_axi_wr_tr::type_id::create("aw_desc");
+      d.addr    = {32'b0, vif.S_AXI_AWADDR};
+      d.awlen   = vif.S_AXI_AWLEN;
+      d.awsize  = vif.S_AXI_AWSIZE;
+      d.awburst = vif.S_AXI_AWBURST;
+      d.id      = vif.S_AXI_AWID;
+      aw_pend.push_back(d);
+    end
+  endtask
+
+  task wr_w_capture;
+    forever begin
+      bridge_axi_wr_tr d;
+      d = bridge_axi_wr_tr::type_id::create("w_burst");
+      d.wdata.delete();
+      d.wstrb.delete();
+      // Accumulate beats until WLAST delimits the burst (length-independent, so
+      // it does not need the AW descriptor to have arrived first).
+      forever begin
+        @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_WVALID && vif.S_AXI_WREADY));
+        d.wdata.push_back(pack_dw(vif.S_AXI_WDATA));
+        d.wstrb.push_back(pack_strb(vif.S_AXI_WSTRB));
+        if (vif.S_AXI_WLAST) break;
+      end
+      wd_pend.push_back(d);
+    end
+  endtask
+
+  task wr_b_capture;
     forever begin
       bridge_axi_wr_tr tr;
-      logic [31:0] aw_addr;
-      logic [ 7:0] aw_len;
-      logic [ 2:0] aw_sz;
-      logic [ 1:0] aw_br;
-      logic [31:0] aw_id_n;
-      int unsigned ix;
-      @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_AWVALID && vif.S_AXI_AWREADY));
-      aw_addr = vif.S_AXI_AWADDR;
-      aw_len  = vif.S_AXI_AWLEN;
-      aw_sz   = vif.S_AXI_AWSIZE;
-      aw_br   = vif.S_AXI_AWBURST;
-      aw_id_n = vif.S_AXI_AWID;
-      tr      = bridge_axi_wr_tr::type_id::create("wr_collect");
-      ix      = 0;
-      tr.addr    = {32'b0, aw_addr};
-      tr.awlen   = aw_len;
-      tr.awsize  = aw_sz;
-      tr.awburst = aw_br;
-      tr.id      = aw_id_n;
-      tr.wdata.delete();
-      tr.wstrb.delete();
-      repeat (aw_len + 1) begin
-        @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_WVALID && vif.S_AXI_WREADY));
-        tr.wdata.push_back(pack_dw(vif.S_AXI_WDATA));
-        tr.wstrb.push_back(pack_strb(vif.S_AXI_WSTRB));
-        ix++;
-      end
+      bridge_axi_wr_tr awd;
+      bridge_axi_wr_tr wdd;
       @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_BVALID && vif.S_AXI_BREADY));
-      tr.bresp = vif.S_AXI_BRESP;
+      // AW/W precede B, so their descriptors are normally already queued; guard
+      // against a same-edge delta ordering by advancing until both are present.
+      while (aw_pend.size() == 0 || wd_pend.size() == 0)
+        @(posedge vif.clk);
+      awd = aw_pend.pop_front();
+      wdd = wd_pend.pop_front();
+      tr  = bridge_axi_wr_tr::type_id::create("wr_collect");
+      tr.addr    = awd.addr;
+      tr.awlen   = awd.awlen;
+      tr.awsize  = awd.awsize;
+      tr.awburst = awd.awburst;
+      tr.id      = awd.id;
+      tr.wdata   = wdd.wdata;
+      tr.wstrb   = wdd.wstrb;
+      tr.bresp   = vif.S_AXI_BRESP;
       ap_wr.write(tr);
     end
   endtask
@@ -117,7 +151,9 @@ class bridge_axi_monitor #(int DW = 64) extends uvm_component;
   task run_phase(uvm_phase phase);
     if (!cfg.enable_axi_mon) return;
     fork
-      wr_loop();
+      wr_aw_capture();
+      wr_w_capture();
+      wr_b_capture();
       rd_loop();
     join
   endtask

@@ -44,7 +44,11 @@ class bridge_scoreboard extends uvm_scoreboard;
 
   function int unsigned ram_key_of(int unsigned port_ix, logic [31:0] aa);
     int unsigned wd_ix;
-    wd_ix = aa[cfg.apb_mem_addr_msb : cfg.apb_mem_addr_lsb];
+    // Equivalent to aa[apb_mem_addr_msb:apb_mem_addr_lsb], but msb/lsb are
+    // runtime cfg fields.  A variable-bound part-select is rejected by the
+    // open-source flow, so extract via shift + mask instead.
+    wd_ix = (aa >> cfg.apb_mem_addr_lsb) &
+            ((32'h1 << (cfg.apb_mem_addr_msb - cfg.apb_mem_addr_lsb + 1)) - 1);
     return (port_ix << 20) | wd_ix;
   endfunction
 
@@ -291,8 +295,7 @@ class bridge_scoreboard extends uvm_scoreboard;
       return;
     `uvm_info(get_name(),
               $sformatf(
-           "SB summary: axi_wr=%0d axi_rd=%0d apb0=%0d apb1=%0d mism=%0d | pred_wr rem p0=%0d p1=%0d pred_rd rem p0=%0d "
-                  "p1=%0d | buf_wr p0=%0d p1=%0d buf_rd p0=%0d p1=%0d",
+           "SB summary: axi_wr=%0d axi_rd=%0d apb0=%0d apb1=%0d mism=%0d | pred_wr rem p0=%0d p1=%0d pred_rd rem p0=%0d p1=%0d | buf_wr p0=%0d p1=%0d buf_rd p0=%0d p1=%0d",
                   axi_wr_seen, axi_rd_seen, apb_seen[0], apb_seen[1], mismatch,
                   pred_wr[0].size(), pred_wr[1].size(), pred_rd[0].size(), pred_rd[1].size(),
                   buf_wr_obs[0].size(), buf_wr_obs[1].size(),

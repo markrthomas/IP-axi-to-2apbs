@@ -197,10 +197,13 @@ class bridge_stress_seq extends uvm_object;
     // Record all pages written by item (INCR touches consecutive pages,
     // FIXED touches only one page repeated).
     function void mark_written(bridge_rand_item item);
-        int unsigned port  = int unsigned'(item.apb_port);
-        int unsigned page0 = int unsigned'(item.addr_page);
+        // Bare assignments (not `int unsigned'(...)` casts): the source fields are
+        // small unsigned bit-vectors, so implicit zero-extension is identical and
+        // parses under Verilator, which rejects the two-word cast form.
+        int unsigned port  = item.apb_port;
+        int unsigned page0 = item.addr_page;
         if (item.burst_type == 2'b01) begin   // INCR
-            for (int unsigned b = 0; b <= int unsigned'(item.burst_len); b++)
+            for (int unsigned b = 0; b <= item.burst_len; b++)
                 sh_written[mk_key(port, page0 + b)] = 1;
         end else begin                         // FIXED
             sh_written[mk_key(port, page0)] = 1;
@@ -209,10 +212,10 @@ class bridge_stress_seq extends uvm_object;
 
     // Return 1 if every beat of a read burst has a written backing entry.
     function bit all_written(bridge_rand_item item);
-        int unsigned port  = int unsigned'(item.apb_port);
-        int unsigned page0 = int unsigned'(item.addr_page);
+        int unsigned port  = item.apb_port;   // see mark_written: bare, not a cast
+        int unsigned page0 = item.addr_page;
         if (item.burst_type == 2'b01) begin
-            for (int unsigned b = 0; b <= int unsigned'(item.burst_len); b++)
+            for (int unsigned b = 0; b <= item.burst_len; b++)
                 if (!sh_written.exists(mk_key(port, page0 + b))) return 0;
         end else begin
             if (!sh_written.exists(mk_key(port, page0))) return 0;

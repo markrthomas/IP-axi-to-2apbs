@@ -9,16 +9,19 @@
 `ifndef BRIDGE_COV_COLLECTOR_SV
 `define BRIDGE_COV_COLLECTOR_SV
 
-// Must be declared before the class that uses them.
-`uvm_analysis_imp_decl(_axi_wr)
-`uvm_analysis_imp_decl(_axi_rd)
+// Must be declared before the class that uses them.  The _cov suffixes are
+// distinct from the scoreboard's _axi_wr/_axi_rd imps: uvm_analysis_imp_decl is
+// unguarded, so reusing a suffix within the same package (both files are
+// `included into bridge_uvm_env_pkg) would redeclare the imp class.
+`uvm_analysis_imp_decl(_axi_wr_cov)
+`uvm_analysis_imp_decl(_axi_rd_cov)
 `uvm_analysis_imp_decl(_apb_cov)
 
 class bridge_cov_collector extends uvm_component;
     `uvm_component_utils(bridge_cov_collector)
 
-    uvm_analysis_imp_axi_wr  #(bridge_axi_wr_tr, bridge_cov_collector) axi_wr_imp;
-    uvm_analysis_imp_axi_rd  #(bridge_axi_rd_tr, bridge_cov_collector) axi_rd_imp;
+    uvm_analysis_imp_axi_wr_cov #(bridge_axi_wr_tr, bridge_cov_collector) axi_wr_imp;
+    uvm_analysis_imp_axi_rd_cov #(bridge_axi_rd_tr, bridge_cov_collector) axi_rd_imp;
     uvm_analysis_imp_apb_cov #(bridge_apb_tr,    bridge_cov_collector) apb_imp;
 
     // Current-transaction handles; covergroups sample these at write() time.
@@ -123,12 +126,12 @@ class bridge_cov_collector extends uvm_component;
         apb_imp    = new("apb_imp",    this);
     endfunction
 
-    function void write_axi_wr(bridge_axi_wr_tr tr);
+    function void write_axi_wr_cov(bridge_axi_wr_tr tr);
         cur_wr = tr;
         cg_axi_write.sample();
     endfunction
 
-    function void write_axi_rd(bridge_axi_rd_tr tr);
+    function void write_axi_rd_cov(bridge_axi_rd_tr tr);
         cur_rd = tr;
         cg_axi_read.sample();
     endfunction

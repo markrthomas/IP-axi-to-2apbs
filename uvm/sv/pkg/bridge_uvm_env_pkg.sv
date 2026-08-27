@@ -101,7 +101,11 @@ package bridge_uvm_env_pkg;
 `include "bridge_axi_monitor.sv"
 `include "bridge_apb_monitor.sv"
 `include "bridge_scoreboard.sv"
+`ifndef VERILATOR
+// Coverage collector uses covergroups the open-source flow can't elaborate;
+// excluded under Verilator (see bridge_env.sv).  VCS/Xcelium build it.
 `include "bridge_cov_collector.sv"
+`endif
 `include "bridge_env.sv"
 
 endpackage

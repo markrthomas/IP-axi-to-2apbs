@@ -397,7 +397,7 @@ package bridge_uvm_tests_pkg;
     task run_phase(uvm_phase phase);
       bridge_axi_stim_64    stim;
       bridge_stress_seq     seq;
-      virtual apb_mon_if    apb_vif;
+      v_apb_side_if_t       apb_vif;   // matches the tb's apb_side_vif publish type
       int unsigned          n_txn;
       string                n_str;
 
@@ -408,11 +408,13 @@ package bridge_uvm_tests_pkg;
         n_txn = 100;
 
       // Retrieve APB side interface so axi_write_burst_ext can drive PSLVERR.
-      if (!uvm_config_db #(virtual apb_mon_if)::get(
+      if (!uvm_config_db #(v_apb_side_if_t)::get(
               this, "", "apb_side_vif", apb_vif))
         `uvm_fatal(get_type_name(), "apb_side_vif not found in config_db")
 
-      stim = bridge_axi_stim_64::type_id::create("stim", this);
+      // bridge_axi_stim_64 is a plain class (no factory registration); construct
+      // it directly like every other test does, not via type_id::create.
+      stim = new();
       stim.sif = apb_vif;
 
       if (!uvm_config_db #(virtual axi4_master_if)::get(
