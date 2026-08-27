@@ -63,6 +63,14 @@ jobs:
     - name: Put Verilator on PATH
       run: echo "$VERILATOR_PREFIX/bin" >> "$GITHUB_PATH"
 
+    # Verilator 5.050 was configured with ccache detected, so its generated
+    # build Makefile invokes `ccache g++`. On a cache HIT the build-from-source
+    # step (which apt-installs ccache) is skipped, so install ccache here
+    # unconditionally — otherwise the --binary build fails with
+    # "ccache: No such file or directory".
+    - name: Ensure ccache present
+      run: sudo apt-get update && sudo apt-get install -y ccache
+
     - name: Verilator version (must be UVM-capable 5.050)
       run: verilator --version
 
