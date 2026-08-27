@@ -1,0 +1,60 @@
+# CLAUDE.md — IP-axi-to-2apbs
+
+AXI4 → 2× APB4 bridge RTL with self-checking testbenches (directed SV, cocotb,
+UVM, formal). One AXI transaction is serialized at a time into APB4 transfers on
+one of two APB ports (address bit 31 selects the port). See `README.md` for the
+architecture and `doc/PLAN.md` for the development plan.
+
+## Verification flows
+
+| Flow | Where | Simulator |
+|------|-------|-----------|
+| Directed SV | `sim/` (per `doc/PLAN.md`) | Icarus |
+| cocotb | `cocotb/` | Icarus/Verilator |
+| UVM | `uvm/sv`, `uvm/tb` | VCS + Xcelium; **open-source Verilator** via `uvm/vlt` |
+| Formal | SymbiYosys | OSS CAD Suite |
+
+## Active thread: UVM on open-source Verilator (`uvm/vlt`)
+
+Runs the same UVM env under Verilator 5.050 (license-free), **green in CI**
+(`tb_uvm_simple` builds with `--binary` and passes). Tracked as near-term item 0
+in `doc/PLAN.md`. **Read `uvm/vlt/README.md` before touching this flow.**
+
+Key facts an agent must know before working here:
+
+- **Verilator must be UVM-capable ≥ 5.050.** The OSS CAD Suite's Verilator is
+  NOT — use the standalone `~/verilator` (5.050). `UVM_HOME` =
+  `~/verilator/test_regress/t/uvm`.
+- **`unset VERILATOR_ROOT`** after sourcing `~/oss-cad-suite/environment` — the
+  stale value it exports makes `~/verilator/bin/verilator` hard-error.
+- **Local RAM ceiling:** this host is ~8 GB (WSL sees ~5.7 GB). `make -C uvm/vlt
+  lint` is cheap (~330 MB) and safe. The full `--binary` build OOMs the VM/
+  session — **run the heavy build in CI** (`.github/workflows/verilator-sim.yml`
+  builds Verilator 5.050 from source and runs it on a runner), or locally only
+  with `BUILD_JOBS=1` under a `ulimit -v` guard. Always lint before building.
+- **`uvm/vlt/uvm_macros.svh` is a required tracked shim** — do not delete
+  (without it a fresh checkout fails lint with cascading parse errors).
+- The shared UVM sources use `` `ifndef VERILATOR `` guards: monitor decoupled,
+  covergroup collector excluded under Verilator (scoreboard invariants still
+  checked). Details in `uvm/vlt/README.md`.
+
+## Repo/workflow gotchas
+
+- **`origin` is SSH (`git@github.com:...`) and SSH auth fails in this env.** Push
+  over HTTPS instead — `gh` is logged in as `markrthomas`:
+  `git push https://github.com/markrthomas/IP-axi-to-2apbs.git main`
+- `NOTES` is gitignored here (`.gitignore` line 38) — durable knowledge goes in
+  tracked docs (`uvm/vlt/README.md`, `doc/`, this file), not a NOTES file.
+- Commit narrowly: this repo often carries in-progress edits across several
+  files; stage only what a change actually needs.
+
+## Next steps (optional, none blocking)
+
+- Extend CI past `simple` to `burst` / `burst_ext` / `parameterized` /
+  `regblock`.
+- Confirm the Verilator run checks the same scoreboard invariants as VCS despite
+  the decoupled monitor and excluded coverage collector.
+- Fix the repeated CI Verilator cache miss (speed only).
+- Cosmetic Verilator warnings left un-addressed: `!item.randomize()` WIDTHTRUNC
+  (`bridge_rand_stim.sv:259`, `bridge_uvm_tests_pkg.sv:350`), int-unsigned width
+  notes in `bridge_rand_stim.sv`.
