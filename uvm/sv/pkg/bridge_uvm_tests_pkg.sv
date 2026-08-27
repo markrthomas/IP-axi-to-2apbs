@@ -429,7 +429,7 @@ package bridge_uvm_tests_pkg;
         begin
           // Generous timeout: seed(32) + n_txn random + sweep(32) beats,
           // each beat at most ~20 APB cycles @ 10 ns => ~(n_txn+64)*200 ns.
-          #( longint'(n_txn + 64) * 200 * 10 );
+          #( (longint'(n_txn) + 64) * 200 * 10 );
           `uvm_fatal(get_type_name(),
               $sformatf("TIMEOUT after %0d+64 transactions", n_txn))
         end

@@ -1,0 +1,163 @@
+# Verilator UVM flow for the AXI4->2xAPB4 bridge UVM environment.
+#
+# Runs the *same* SystemVerilog UVM env as the VCS/Xcelium flows (../sv, ../tb)
+# but under open-source Verilator (>= 5.050, which can elaborate/run UVM) using
+# the Accellera UVM 2020.3.1 library that ships bundled in the Verilator source
+# tree (test_regress/t/uvm) — the same library mirrored at
+# https://github.com/chipsalliance/uvm-verilator.
+#
+# Quick start (local):
+#   export UVM_HOME=/path/to/verilator/test_regress/t/uvm
+#   make -C uvm/vlt simple            # build + run tb_uvm_simple
+#   make -C uvm/vlt all               # simple + burst + burst_ext + parameterized
+#
+# NOTE: single-threaded and slow to build/run — this is a correctness flow, not
+# a performance one.  Prefer `simple` as a CI smoke test.
+
+VERILATOR ?= verilator
+
+# Directory holding uvm_pkg_all_v2020_3_1_dpi.svh and v2020_3_1/dpi/uvm_dpi.cc.
+# Override on the command line or via the environment for your install.
+UVM_HOME ?= $(error Set UVM_HOME to the bundled Verilator UVM dir, e.g. \
+  /path/to/verilator/test_regress/t/uvm)
+
+UVM_HDR := $(UVM_HOME)/uvm_pkg_all_v2020_3_1_dpi.svh
+UVM_DPI := $(UVM_HOME)/v2020_3_1/dpi/uvm_dpi.cc
+
+# Parallelism.  The generated UVM C++ is large; more jobs build faster but use
+# more RAM.  BUILD_JOBS=1 is the RAM-safe default; raise it (e.g. nproc) where
+# memory allows — CI sets BUILD_JOBS=$(nproc).
+BUILD_JOBS ?= 1
+
+# --binary: self-contained executable; --timing: UVM needs event/#delay support;
+# --vpi: UVM DPI/HDL backdoor. -Wno-fatal keeps library-side warnings non-fatal;
+# -O0 on the C++ side keeps the (large) UVM compile within a modest RAM budget.
+# -Wno-COVERIGN silences the (excluded) covergroup notes; width warnings stay
+# non-fatal via -Wno-fatal.
+VFLAGS ?= --binary --timing --vpi -j $(BUILD_JOBS) --build-jobs $(BUILD_JOBS) \
+          -Wno-fatal -Wno-COVERIGN --CFLAGS -O0
+
+# Runtime plusargs common to every test.
+UVM_PLUSARGS ?= +UVM_NO_RELNOTES
+
+VLT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+SV      := $(abspath $(VLT_DIR)/../sv)
+TB      := $(abspath $(VLT_DIR)/../tb)
+RTL     := $(abspath $(VLT_DIR)/../../src)
+OBJ     := $(VLT_DIR)/obj
+
+INCS := +incdir+$(SV)/interfaces +incdir+$(SV)/pkg +incdir+$(SV)/env \
+        +incdir+$(SV)/monitors +incdir+$(SV)/scoreboard \
+        +incdir+$(SV)/transactions +incdir+$(SV)/cov +incdir+$(SV)/seq \
+        +incdir+$(UVM_HOME) +incdir+$(VLT_DIR)
+
+# Env/test packages shared by every bridge top (order-independent for Verilator).
+COMMON := $(SV)/interfaces/axi4_master_if.sv \
+          $(SV)/interfaces/apb_sel_tracker_if.sv \
+          $(SV)/interfaces/apb_burst_ext_side_if.sv \
+          $(SV)/pkg/bridge_stimulus_pkg.sv \
+          $(SV)/interfaces/apb_mon_if.sv \
+          $(SV)/pkg/bridge_uvm_env_pkg.sv \
+          $(SV)/pkg/bridge_uvm_tests_pkg.sv
+
+# $(call build,<top>,<rtl+model srcs>) -> compile into $(OBJ)/<top>/V<top>
+define build
+	rm -rf $(OBJ)/$(1)
+	mkdir -p $(OBJ)/$(1)
+	$(VERILATOR) $(VFLAGS) --top-module $(1) --Mdir $(OBJ)/$(1) $(INCS) \
+	  $(UVM_HDR) $(UVM_DPI) $(2) $(COMMON) $(TB)/$(1).sv
+endef
+
+# $(call run,<top>,<extra plusargs>)
+define run
+	$(OBJ)/$(1)/V$(1) $(UVM_PLUSARGS) $(2)
+endef
+
+# --- RAM-safe lint -----------------------------------------------------------
+# Elaborate-only (no C++ build): near-zero memory (~330 MB peak) and a few
+# seconds, vs. the multi-GB `--binary` compile.  Use as a CI smoke check and to
+# validate sources on RAM-constrained hosts where the full build OOMs.
+# No UVM_DPI here (lint does not compile C++).
+LINTFLAGS ?= --lint-only --timing -Wno-fatal -Wno-COVERIGN
+
+# $(call lint,<top>,<rtl+model srcs>)
+define lint
+	$(VERILATOR) $(LINTFLAGS) --top-module $(1) $(INCS) \
+	  $(UVM_HDR) $(2) $(COMMON) $(TB)/$(1).sv
+endef
+
+.PHONY: all simple burst burst_ext parameterized \
+        regblock regblock-hw-reset regblock-bit-bash regblock-reg-access \
+        regblock-directed lint lint-simple lint-burst lint-burst_ext \
+        lint-parameterized lint-regblock clean
+
+all: simple burst burst_ext parameterized
+
+# lint every UVM top (elaborate-only; RAM-safe CI smoke check)
+lint: lint-simple lint-burst lint-burst_ext lint-parameterized lint-regblock
+
+lint-simple:
+	$(call lint,tb_uvm_simple,$(RTL)/axi4_to_apb4_2x_simple.v \
+	  $(SV)/models/apb_dual_mem_simple.sv)
+
+lint-burst:
+	$(call lint,tb_uvm_burst,$(RTL)/axi4_to_apb4_2x_burst.v \
+	  $(SV)/models/apb_dual_mem_burst.sv)
+
+lint-burst_ext:
+	$(call lint,tb_uvm_burst_ext,$(RTL)/axi4_to_apb4_2x_burst.v \
+	  $(SV)/models/apb_ext_mem_dual.sv)
+
+lint-parameterized:
+	$(call lint,tb_uvm_parameterized,$(RTL)/axi4_to_apb4_2x_burst.v \
+	  $(SV)/models/apb_dual_mem_param.sv)
+
+lint-regblock:
+	$(VERILATOR) $(LINTFLAGS) --top-module tb_uvm_regblock $(INCS) \
+	  $(UVM_HDR) $(REGBLOCK_SRCS) $(TB)/tb_uvm_regblock.sv
+
+simple:
+	$(call build,tb_uvm_simple,$(RTL)/axi4_to_apb4_2x_simple.v \
+	  $(SV)/models/apb_dual_mem_simple.sv)
+	$(call run,tb_uvm_simple,)
+
+burst:
+	$(call build,tb_uvm_burst,$(RTL)/axi4_to_apb4_2x_burst.v \
+	  $(SV)/models/apb_dual_mem_burst.sv)
+	$(call run,tb_uvm_burst,)
+
+burst_ext:
+	$(call build,tb_uvm_burst_ext,$(RTL)/axi4_to_apb4_2x_burst.v \
+	  $(SV)/models/apb_ext_mem_dual.sv)
+	$(call run,tb_uvm_burst_ext,)
+
+parameterized:
+	$(call build,tb_uvm_parameterized,$(RTL)/axi4_to_apb4_2x_burst.v \
+	  $(SV)/models/apb_dual_mem_param.sv)
+	$(call run,tb_uvm_parameterized,)
+
+# --- regblock (axi3lite) UVM top: one build, selectable test via +UVM_TESTNAME ---
+REGBLOCK_SRCS := $(RTL)/axi3lite_regblock.v \
+                 $(SV)/interfaces/axi3lite_if.sv \
+                 $(SV)/pkg/regblock_stimulus_pkg.sv \
+                 $(SV)/pkg/regblock_uvm_env_pkg.sv \
+                 $(SV)/pkg/regblock_uvm_tests_pkg.sv
+
+regblock:
+	rm -rf $(OBJ)/tb_uvm_regblock
+	mkdir -p $(OBJ)/tb_uvm_regblock
+	$(VERILATOR) $(VFLAGS) --top-module tb_uvm_regblock \
+	  --Mdir $(OBJ)/tb_uvm_regblock $(INCS) \
+	  $(UVM_HDR) $(UVM_DPI) $(REGBLOCK_SRCS) $(TB)/tb_uvm_regblock.sv
+
+regblock-hw-reset: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_hw_reset)
+regblock-bit-bash: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_bit_bash)
+regblock-reg-access: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_reg_access)
+regblock-directed: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_directed)
+
+clean:
+	rm -rf $(OBJ)
