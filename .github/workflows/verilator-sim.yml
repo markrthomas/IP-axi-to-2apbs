@@ -1,0 +1,92 @@
+name: UVM on Verilator
+
+# Builds and runs the SystemVerilog UVM environment (uvm/sv + uvm/tb) under the
+# open-source Verilator UVM flow (uvm/vlt/Makefile).
+#
+# The apt/system Verilator is NOT UVM-capable, so this workflow builds Verilator
+# 5.050 from source (the same release as the local ~/verilator reference) and
+# uses the UVM library bundled in its source tree (test_regress/t/uvm) as
+# UVM_HOME.  The cloud runner (~16 GB RAM) has the headroom the RAM-constrained
+# local host lacks for the large --binary C++ compile.
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  # UVM-capable Verilator. Pinned to the v5.050 release tag; the local
+  # ~/verilator is v5.050-60-g3d2421f3b (a few commits past this tag).
+  VERILATOR_REF: v5.050
+  VERILATOR_PREFIX: /home/runner/verilator-install
+
+jobs:
+  uvm-verilator:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+
+    # Cache the whole Verilator install (bin + share + bundled UVM lib) keyed on
+    # the pinned ref, so the ~10-minute source build runs only on cache miss.
+    - name: Cache Verilator install
+      id: cache-verilator
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.VERILATOR_PREFIX }}
+        key: ${{ runner.os }}-verilator-${{ env.VERILATOR_REF }}-uvm
+
+    - name: Build UVM-capable Verilator (on cache miss)
+      if: steps.cache-verilator.outputs.cache-hit != 'true'
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y \
+          git help2man perl python3 make autoconf g++ flex bison ccache \
+          libgoogle-perftools-dev numactl perl-doc libfl2 libfl-dev \
+          zlib1g zlib1g-dev
+        git clone --depth 1 --branch "$VERILATOR_REF" \
+          https://github.com/verilator/verilator verilator-src
+        cd verilator-src
+        autoconf
+        ./configure --prefix="$VERILATOR_PREFIX"
+        make -j"$(nproc)"
+        make install
+        # test_regress/ is not installed by `make install`; keep the bundled
+        # UVM library (uvm_pkg_all_v2020_3_1_dpi.svh + v2020_3_1/dpi/uvm_dpi.cc)
+        # alongside the install so UVM_HOME survives on a later cache hit.
+        mkdir -p "$VERILATOR_PREFIX/uvm"
+        cp -a test_regress/t/uvm/. "$VERILATOR_PREFIX/uvm/"
+
+    - name: Put Verilator on PATH
+      run: echo "$VERILATOR_PREFIX/bin" >> "$GITHUB_PATH"
+
+    - name: Verilator version (must be UVM-capable 5.050)
+      run: verilator --version
+
+    # RAM-safe elaborate-only check across all UVM tops (~330 MB, seconds each).
+    - name: Lint UVM tops
+      run: |
+        make -C uvm/vlt lint \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm"
+
+    # Full build + run of the documented smoke test. The runner's RAM allows a
+    # parallel build; the Makefile keeps -O0 to bound peak memory.
+    - name: Build and run UVM smoke test (tb_uvm_simple)
+      run: |
+        make -C uvm/vlt simple \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm" \
+          BUILD_JOBS="$(nproc)"
+
+    - name: Upload UVM sim log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: uvm-verilator-logs
+        path: uvm/vlt/obj/**/*.log
+        retention-days: 7
+        if-no-files-found: ignore

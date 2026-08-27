@@ -9,7 +9,7 @@
 | RTL | Simple and burst bridge variants; 100% Verilator line coverage |
 | Directed simulation | Icarus: simple, burst, burst-extended, wait-state (1–3), parameterized, stress |
 | Cocotb | 18 tests across simple (5) and burst (13) bridges; runs in CI |
-| UVM environment | Scoreboard, coverage collector, constrained-random sequences (`bridge_rand_seq`, `bridge_stress_seq`), VCS + Xcelium make targets |
+| UVM environment | Scoreboard, coverage collector, constrained-random sequences (`bridge_rand_seq`, `bridge_stress_seq`), VCS + Xcelium make targets; open-source Verilator flow (`uvm/vlt/`) in progress — see near-term item 0 |
 | Formal | SymbiYosys BMC (simple depth 30, burst depth 50) + cover; safety + liveness; all 4 proofs pass; CI gated |
 | Coverage | Verilator C++ harnesses; 100% line; HTML report via `make cov-report`; exclusions documented in `doc/coverage_notes.md` |
 | CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact |
@@ -18,6 +18,45 @@
 ---
 
 ## Near-term
+
+### 0 — UVM on open-source Verilator (`uvm/vlt/`) — IN PROGRESS
+
+**What:** Run the *same* SystemVerilog UVM env (`uvm/sv`, `uvm/tb`) under
+open-source Verilator 5.050 (the first Verilator that can elaborate/run UVM) with
+the bundled Accellera UVM 2020.3.1 library, giving a license-free CI path
+alongside the VCS/Xcelium flows. Verilator's `--timing` scheduler resolves some
+constructs differently from VCS, so the env carries `` `ifndef VERILATOR ``
+guards where behavior must diverge.
+
+**Status (2026-08-27):**
+
+- `uvm/vlt/Makefile` builds each UVM top with `--binary --timing --vpi`
+  (`BUILD_JOBS=1`, `--CFLAGS -O0` as RAM-safe defaults); `make lint`/`lint-<top>`
+  do an elaborate-only smoke check (~330 MB peak).
+- Env ported for Verilator: monitor channels decoupled
+  (`bridge_axi_monitor.sv`); coverage collector excluded under Verilator
+  (`bridge_cov_collector.sv`, `bridge_env.sv`, `bridge_uvm_env_pkg.sv`);
+  virtual-interface / factory / cast-form adjustments in `bridge_uvm_tests_pkg.sv`,
+  `bridge_rand_stim.sv`, `bridge_scoreboard.sv`.
+- **Lint passes** on `tb_uvm_simple` (exit 0). Full `--binary` build is unproven
+  locally — it OOMs an 8 GB host at the g++ stage; run it on the cloud runner.
+
+**Remaining work items:**
+
+- CI: `.github/workflows/verilator-sim.yml` builds UVM-capable Verilator 5.050
+  from source and runs `make -C uvm/vlt lint` + `simple` — confirm the full
+  `--binary` build and the smoke run pass on the runner.
+- Extend the passing run beyond `simple` to `burst`, `burst_ext`,
+  `parameterized`, and the `regblock` tests.
+- Reconcile the `` `ifndef VERILATOR `` divergences: confirm the Verilator run
+  checks the same scoreboard invariants as VCS despite the decoupled monitor and
+  excluded coverage collector.
+
+**Exit:** `make -C uvm/vlt simple` builds and runs green in CI on Verilator
+5.050; the divergences are documented; baseline table updated to list Verilator
+as a supported UVM simulator.
+
+---
 
 ### ~~1 — Formal: liveness properties and deeper proof~~ ✓ DONE 2026-05-14
 
