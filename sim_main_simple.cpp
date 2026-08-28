@@ -189,14 +189,13 @@ int main(int argc, char** argv) {
 
     // 12. Repeat a write and read with 2 APB wait states (WAIT_CYCLES=2) to
     //     exercise the PREADY polling loop under realistic APB timing.
+    //     apb_slave() reloads g_ws_cnt* from g_wait_states whenever PENABLE is
+    //     deasserted, so updating g_wait_states here takes effect automatically
+    //     on the first idle cycle before the next APB access.
     g_wait_states = 2;
-    g_ws_cnt0 = g_wait_states;
-    g_ws_cnt1 = g_wait_states;
     write_single(0x00008000, 0xA5A5A5A5A5A5A5A5ULL);
     read_single(0x00008000);
     g_wait_states = 0;
-    g_ws_cnt0 = 0;
-    g_ws_cnt1 = 0;
 
     for (int i = 0; i < 8; i++) tick();
 
