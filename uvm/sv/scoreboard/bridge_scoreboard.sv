@@ -204,6 +204,27 @@ class bridge_scoreboard extends uvm_scoreboard;
     end
     if (txn_illegal) return;
 
+    // SLVERR: the bridge may have accepted fewer W beats than AWLEN+1 when
+    // wlast_err fires (early WLAST or missing WLAST at last beat).  Generate
+    // APB write predictions only for the beats the W monitor actually captured
+    // (wdata.size()), not awlen+1, and skip the length-equality check.
+    if (t.bresp == 2'b10) begin
+      for (b = 0; b < int'(t.wdata.size()); b++) begin
+        aa   = bridge_uvm_env_pkg::bridge_beat_addr(t.addr[31:0], b, t.awsize, t.awburst);
+        pidx = bridge_uvm_env_pkg::port_decode(aa, cfg.apb_sel_bit);
+        pred = bridge_apb_tr::type_id::create($sformatf("exp_apb_slverr_wr_%0d", b));
+        pred.port    = pidx;
+        pred.paddr   = {32'b0, aa};
+        pred.pwrite  = 1'b1;
+        pred.pwdata  = t.wdata[b];
+        pred.pstrb   = t.wstrb[b];
+        pred.pslverr = 1'b0;
+        pred_wr[pidx].push_back(pred);
+      end
+      reconcile_wr_ports();
+      return;
+    end
+
     if (int'(t.awlen + 1) !== t.wdata.size() || t.wdata.size() != t.wstrb.size()) begin
       `uvm_error(get_name(), $sformatf("AW len vs W beats mismatch awlen=%0d wbeats=%0d/strb%d", t.awlen,
                                        t.wdata.size(), t.wstrb.size()))

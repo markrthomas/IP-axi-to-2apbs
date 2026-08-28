@@ -226,8 +226,18 @@ package bridge_stimulus_pkg;
           sif.PSLVERR1 <= (i == 32'(pslverr_at));
         else
           sif.PSLVERR0 <= (i == 32'(pslverr_at));
-        while (!vif.S_AXI_WREADY)
+        // Wait for WREADY, but also watch for BVALID: the bridge may have
+        // already returned a B response (e.g. early WLAST or wlast_err) and
+        // will never assert WREADY again for this transaction.
+        while (!vif.S_AXI_WREADY && !vif.S_AXI_BVALID)
           @(posedge vif.clk);
+        if (vif.S_AXI_BVALID) begin
+          vif.S_AXI_WVALID <= 1'h0;
+          vif.S_AXI_WLAST  <= 1'h0;
+          sif.PSLVERR0 <= 1'h0;
+          sif.PSLVERR1 <= 1'h0;
+          break;
+        end
         @(posedge vif.clk);
         vif.S_AXI_WVALID <= 1'h0;
         vif.S_AXI_WLAST <= 1'h0;
