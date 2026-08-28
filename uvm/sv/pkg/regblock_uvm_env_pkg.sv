@@ -77,7 +77,7 @@ package regblock_uvm_env_pkg;
           drive_write(item);
         else
           drive_read(item);
-        seq_item_port.item_done();
+        seq_item_port.item_done(item);
       end
     endtask
 
