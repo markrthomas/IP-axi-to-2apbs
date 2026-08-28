@@ -81,11 +81,20 @@ jobs:
           VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
           UVM_HOME="$VERILATOR_PREFIX/uvm"
 
-    # Full build + run of the documented smoke test. The runner's RAM allows a
-    # parallel build; the Makefile keeps -O0 to bound peak memory.
-    - name: Build and run UVM smoke test (tb_uvm_simple)
+    # Full build + run of the UVM tops. The runner's RAM allows a parallel
+    # build; the Makefile keeps -O0 to bound peak memory. Each target fails the
+    # step on any UVM_ERROR/UVM_FATAL (uvm/vlt/Makefile `run` gate), so a
+    # scoreboard mismatch turns CI red rather than passing silently.
+    - name: Build and run UVM env (tb_uvm_simple)
       run: |
         make -C uvm/vlt simple \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm" \
+          BUILD_JOBS="$(nproc)"
+
+    - name: Build and run UVM env (tb_uvm_burst)
+      run: |
+        make -C uvm/vlt burst \
           VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
           UVM_HOME="$VERILATOR_PREFIX/uvm" \
           BUILD_JOBS="$(nproc)"
