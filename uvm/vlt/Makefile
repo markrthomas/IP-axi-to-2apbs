@@ -68,9 +68,18 @@ define build
 	  $(UVM_HDR) $(UVM_DPI) $(2) $(COMMON) $(TB)/$(1).sv
 endef
 
-# $(call run,<top>,<extra plusargs>)
+# $(call run,<top>,<extra plusargs>) — runs the sim and turns the UVM report
+# into a make pass/fail: any non-zero UVM_ERROR/UVM_FATAL count, or a missing
+# report (crash before report_phase), fails the target.
 define run
-	$(OBJ)/$(1)/V$(1) $(UVM_PLUSARGS) $(2)
+	$(OBJ)/$(1)/V$(1) $(UVM_PLUSARGS) $(2) 2>&1 | tee $(OBJ)/$(1)/run.log
+	@echo "----- UVM report counts ($(1)) -----"
+	@grep -E "UVM_(INFO|WARNING|ERROR|FATAL) :" $(OBJ)/$(1)/run.log || true
+	@if grep -qE "UVM_(ERROR|FATAL) :[[:space:]]*[1-9]" $(OBJ)/$(1)/run.log; then \
+	  echo "FAIL: $(1) reported UVM_ERROR/UVM_FATAL"; exit 1; \
+	elif ! grep -qE "UVM_INFO :" $(OBJ)/$(1)/run.log; then \
+	  echo "FAIL: $(1) produced no UVM report (crash before report_phase?)"; exit 1; \
+	else echo "PASS: $(1) — clean UVM report (0 errors, 0 fatals)"; fi
 endef
 
 # --- RAM-safe lint -----------------------------------------------------------

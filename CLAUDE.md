@@ -17,8 +17,11 @@ architecture and `doc/PLAN.md` for the development plan.
 ## Active thread: UVM on open-source Verilator (`uvm/vlt`)
 
 Runs the same UVM env under Verilator 5.050 (license-free), **green in CI**
-(`tb_uvm_simple` builds with `--binary` and passes). Tracked as near-term item 0
-in `doc/PLAN.md`. **Read `uvm/vlt/README.md` before touching this flow.**
+(`tb_uvm_simple` and `tb_uvm_burst` build with `--binary` and run
+scoreboard-clean — `mism=0`, `UVM_ERROR: 0`). The `uvm/vlt` `run` recipe fails
+on any `UVM_ERROR`/`UVM_FATAL`, so CI is a real correctness gate. Tracked as
+near-term item 0 in `doc/PLAN.md`. **Read `uvm/vlt/README.md` before touching
+this flow.**
 
 Key facts an agent must know before working here:
 
@@ -50,10 +53,11 @@ Key facts an agent must know before working here:
 
 ## Next steps (optional, none blocking)
 
-- Extend CI past `simple` to `burst` / `burst_ext` / `parameterized` /
-  `regblock`.
-- Confirm the Verilator run checks the same scoreboard invariants as VCS despite
-  the decoupled monitor and excluded coverage collector.
+- CI now runs `simple` + `burst` (both gated on `UVM_ERROR`/`UVM_FATAL`). Extend
+  it further to `burst_ext` / `parameterized` / `regblock`.
+- Scoreboard invariants confirmed equivalent to VCS for `simple`/`burst` (queues
+  drain, `mism=0`) despite the decoupled monitor and excluded coverage
+  collector; re-confirm as the remaining tops are enabled.
 - Fix the repeated CI Verilator cache miss (speed only).
 - Cosmetic Verilator warnings left un-addressed: `!item.randomize()` WIDTHTRUNC
   (`bridge_rand_stim.sv:259`, `bridge_uvm_tests_pkg.sv:350`), int-unsigned width

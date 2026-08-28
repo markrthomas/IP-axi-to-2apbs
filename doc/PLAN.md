@@ -28,29 +28,36 @@ alongside the VCS/Xcelium flows. Verilator's `--timing` scheduler resolves some
 constructs differently from VCS, so the env carries `` `ifndef VERILATOR ``
 guards where behavior must diverge.
 
-**Status (2026-08-27):**
+**Status (2026-08-28):**
 
 - `uvm/vlt/Makefile` builds each UVM top with `--binary --timing --vpi`
   (`BUILD_JOBS=1`, `--CFLAGS -O0` as RAM-safe defaults); `make lint`/`lint-<top>`
-  do an elaborate-only smoke check (~330 MB peak).
+  do an elaborate-only smoke check (~330 MB peak). The `run` recipe parses the
+  UVM report and fails the target on any `UVM_ERROR`/`UVM_FATAL` (or a missing
+  report), so a scoreboard mismatch is a hard failure rather than a silent pass.
 - Env ported for Verilator: monitor channels decoupled
   (`bridge_axi_monitor.sv`); coverage collector excluded under Verilator
   (`bridge_cov_collector.sv`, `bridge_env.sv`, `bridge_uvm_env_pkg.sv`);
   virtual-interface / factory / cast-form adjustments in `bridge_uvm_tests_pkg.sv`,
   `bridge_rand_stim.sv`, `bridge_scoreboard.sv`.
-- **Lint passes** on `tb_uvm_simple` (exit 0). Full `--binary` build is unproven
-  locally — it OOMs an 8 GB host at the g++ stage; run it on the cloud runner.
+- **Full `--binary` build + run confirmed locally.** `simple` and `burst` both
+  build and run **scoreboard-clean** (`axi_wr=2 axi_rd=2 apb0=2 apb1=2 mism=0`,
+  `UVM_ERROR: 0`, `UVM_FATAL: 0`). The earlier OOM was the single-threaded
+  RAM-safe default, not a hard ceiling: `BUILD_JOBS=N` with `--CFLAGS -O0`
+  completes on the 8 GB host.
 
 **Remaining work items:**
 
 - CI: `.github/workflows/verilator-sim.yml` builds UVM-capable Verilator 5.050
-  from source and runs `make -C uvm/vlt lint` + `simple` — confirm the full
-  `--binary` build and the smoke run pass on the runner.
-- Extend the passing run beyond `simple` to `burst`, `burst_ext`,
-  `parameterized`, and the `regblock` tests.
-- Reconcile the `` `ifndef VERILATOR `` divergences: confirm the Verilator run
-  checks the same scoreboard invariants as VCS despite the decoupled monitor and
-  excluded coverage collector.
+  from source and runs `make -C uvm/vlt lint` + `simple` + `burst`. ✓ simple and
+  burst confirmed green (build + gated run).
+- Extend the passing run to the remaining tops: `burst_ext`, `parameterized`,
+  and the `regblock` tests.
+- ✓ Reconciled the `` `ifndef VERILATOR `` divergences for simple/burst: the
+  Verilator run checks the same scoreboard invariants as VCS (all `pred_*`/
+  `buf_*` queues drain to zero, `mism=0`) despite the decoupled monitor and
+  excluded coverage collector. Confirm this holds for the remaining tops as they
+  are enabled.
 
 **Exit:** `make -C uvm/vlt simple` builds and runs green in CI on Verilator
 5.050; the divergences are documented; baseline table updated to list Verilator
