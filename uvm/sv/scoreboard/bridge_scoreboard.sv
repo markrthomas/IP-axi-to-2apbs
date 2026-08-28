@@ -38,8 +38,10 @@ class bridge_scoreboard extends uvm_scoreboard;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    if (!uvm_config_db #(bridge_env_cfg)::get(this, "", "cfg", cfg))
-      cfg = bridge_env_cfg::type_id::create("sb_cfg");
+    if (cfg == null) begin
+      if (!uvm_config_db #(bridge_env_cfg)::get(this, "", "cfg", cfg))
+        cfg = bridge_env_cfg::type_id::create("sb_cfg");
+    end
   endfunction
 
   function int unsigned ram_key_of(int unsigned port_ix, logic [31:0] aa);
