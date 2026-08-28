@@ -18,10 +18,30 @@ static Vaxi4_to_apb4_2x_burst* top;
 static int g_slverr_port = -1;
 // Inject PSLVERR only for a limited number of APB accesses (beats).
 static int g_slverr_beats = 0;
+// Number of wait states the APB slave inserts before asserting PREADY.
+static int g_wait_states = 0;
+
+// Per-port wait-state countdown: decremented each cycle PENABLE is high;
+// PREADY is asserted only when the counter reaches zero.
+static int g_ws_cnt0 = 0;
+static int g_ws_cnt1 = 0;
 
 static void apb_slave() {
-    top->PREADY0  = top->PENABLE0;
-    top->PREADY1  = top->PENABLE1;
+    // Update per-port counters and drive PREADY.
+    if (top->PENABLE0) {
+        if (g_ws_cnt0 > 0) { g_ws_cnt0--; top->PREADY0 = 0; }
+        else                { top->PREADY0 = 1; }
+    } else {
+        g_ws_cnt0 = g_wait_states;
+        top->PREADY0 = 0;
+    }
+    if (top->PENABLE1) {
+        if (g_ws_cnt1 > 0) { g_ws_cnt1--; top->PREADY1 = 0; }
+        else                { top->PREADY1 = 1; }
+    } else {
+        g_ws_cnt1 = g_wait_states;
+        top->PREADY1 = 0;
+    }
     top->PRDATA0  = (uint64_t)0xDEADBEEFCAFEBABEULL;
     top->PRDATA1  = (uint64_t)0x0123456789ABCDEFULL;
 
@@ -225,6 +245,18 @@ int main(int argc, char** argv) {
     do_w_beat(0xA5A5A5A5A5A5A5A5ULL, true);
     wait_b();
     do_read(0x8000A000, 1, /*arburst=*/1, /*arprot=*/5);
+
+    // 16. Repeat a single write and a 4-beat burst read with 2 APB wait states
+    //     (WAIT_CYCLES=2) to exercise the PREADY polling loop under realistic
+    //     APB timing.  apb_slave() reloads g_ws_cnt* from g_wait_states whenever
+    //     PENABLE is deasserted, so updating g_wait_states here takes effect
+    //     automatically on the first idle cycle before the next APB access.
+    g_wait_states = 2;
+    do_aw(0x0000B000, 0);
+    do_w_beat(0xB5B5B5B5B5B5B5B5ULL, true);
+    wait_b();
+    do_read(0x0000B000, 4);
+    g_wait_states = 0;
 
     for (int i = 0; i < 8; i++) tick();
 
