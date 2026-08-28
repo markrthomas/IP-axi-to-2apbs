@@ -43,6 +43,9 @@ jobs:
       - name: Verilator coverage (simple + burst bridges)
         run: make coverage
 
+      - name: Generate HTML coverage report
+        run: make cov-report
+
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -51,6 +54,13 @@ jobs:
             coverage_simple.info
             coverage_burst.info
             coverage_regblock.info
+          if-no-files-found: ignore
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage_report.html
           if-no-files-found: ignore
 
   cocotb:
