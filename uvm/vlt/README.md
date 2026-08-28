@@ -7,9 +7,10 @@ bundled in the Verilator source tree (`test_regress/t/uvm`, mirror:
 `chipsalliance/uvm-verilator`). This gives a license-free correctness/CI path
 alongside the commercial simulators.
 
-Status: **green in CI** (`tb_uvm_simple` builds with `--binary` and runs
-`SIMPLE TEST PASSED`, scoreboard clean, 0 UVM_ERROR/UVM_FATAL). See
-`doc/PLAN.md` near-term item 0.
+Status: **green in CI** — all tops (`tb_uvm_simple`, `tb_uvm_burst`,
+`tb_uvm_burst_ext`, `tb_uvm_parameterized`, and all four `tb_uvm_regblock`
+tests) build with `--binary` and run scoreboard-clean, 0 UVM_ERROR/UVM_FATAL.
+See `doc/PLAN.md` near-term item 0.
 
 ## Toolchain requirements
 
@@ -76,14 +77,13 @@ down the whole session/VM**. Options:
 ## Verilator-specific divergences in the shared env
 
 The shared UVM sources carry `` `ifndef VERILATOR `` guards where behavior must
-differ from VCS. Two to be aware of when reasoning about parity:
+differ from VCS. Three to be aware of when reasoning about parity:
 
 - **`bridge_axi_monitor`** decouples channel collection — Verilator's `--timing`
   scheduler resolves cross-channel blocking differently than VCS.
 - **`bridge_cov_collector`** (the covergroup-based collector) is **excluded**
   under Verilator; VCS/Xcelium still build it. So the Verilator run does not
   collect functional coverage — it validates the scoreboard invariants only.
-
-Open follow-up: confirm the Verilator run checks the same scoreboard invariants
-as VCS despite the decoupled monitor and excluded collector; extend CI past
-`simple` to the other tops.
+- **`regblock_cov_collector`** (covergroup-based, in `regblock_uvm_env_pkg.sv`)
+  is likewise excluded under Verilator. The `regblock_env` scoreboard invariants
+  (shadow-memory read-back checks, SLVERR-path detection) are still verified.

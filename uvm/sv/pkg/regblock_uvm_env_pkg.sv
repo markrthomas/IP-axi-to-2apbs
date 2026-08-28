@@ -445,6 +445,9 @@ package regblock_uvm_env_pkg;
   // -------------------------------------------------------------------------
   // Coverage collector
   // -------------------------------------------------------------------------
+`ifndef VERILATOR
+  // Covergroups are not supported by the open-source Verilator UVM flow;
+  // excluded under Verilator (see regblock_env below).  VCS/Xcelium build it.
   class regblock_cov_collector extends uvm_subscriber #(axi3lite_seq_item);
     `uvm_component_utils(regblock_cov_collector)
 
@@ -478,6 +481,7 @@ package regblock_uvm_env_pkg;
     endfunction
 
   endclass
+`endif
 
   // -------------------------------------------------------------------------
   // Environment
@@ -490,7 +494,9 @@ package regblock_uvm_env_pkg;
     regblock_axi3lite_adapter              adapter;
     uvm_reg_predictor #(axi3lite_seq_item) predictor;
     regblock_scoreboard                    scoreboard;
+`ifndef VERILATOR
     regblock_cov_collector                 cov;
+`endif
     regblock_env_cfg                       cfg;
 
     function new(string name, uvm_component parent);
@@ -512,8 +518,10 @@ package regblock_uvm_env_pkg;
 
       if (cfg.has_scoreboard)
         scoreboard = regblock_scoreboard::type_id::create("scoreboard", this);
+`ifndef VERILATOR
       if (cfg.has_coverage)
         cov = regblock_cov_collector::type_id::create("cov", this);
+`endif
     endfunction
 
     function void connect_phase(uvm_phase phase);
@@ -529,8 +537,10 @@ package regblock_uvm_env_pkg;
 
       if (cfg.has_scoreboard)
         agent.mon.ap.connect(scoreboard.mon_export);
+`ifndef VERILATOR
       if (cfg.has_coverage)
         agent.mon.ap.connect(cov.analysis_export);
+`endif
     endfunction
 
   endclass
