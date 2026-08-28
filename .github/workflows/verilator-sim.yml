@@ -99,6 +99,48 @@ jobs:
           UVM_HOME="$VERILATOR_PREFIX/uvm" \
           BUILD_JOBS="$(nproc)"
 
+    - name: Build and run UVM env (tb_uvm_burst_ext)
+      run: |
+        make -C uvm/vlt burst_ext \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm" \
+          BUILD_JOBS="$(nproc)"
+
+    - name: Build and run UVM env (tb_uvm_parameterized)
+      run: |
+        make -C uvm/vlt parameterized \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm" \
+          BUILD_JOBS="$(nproc)"
+
+    - name: Build and run UVM env (tb_uvm_regblock — hw-reset)
+      run: |
+        make -C uvm/vlt regblock \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm" \
+          BUILD_JOBS="$(nproc)"
+        make -C uvm/vlt regblock-hw-reset \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm"
+
+    - name: Run UVM env (tb_uvm_regblock — bit-bash)
+      run: |
+        make -C uvm/vlt regblock-bit-bash \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm"
+
+    - name: Run UVM env (tb_uvm_regblock — reg-access)
+      run: |
+        make -C uvm/vlt regblock-reg-access \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm"
+
+    - name: Run UVM env (tb_uvm_regblock — directed)
+      run: |
+        make -C uvm/vlt regblock-directed \
+          VERILATOR="$VERILATOR_PREFIX/bin/verilator" \
+          UVM_HOME="$VERILATOR_PREFIX/uvm"
+
     - name: Upload UVM sim log
       if: always()
       uses: actions/upload-artifact@v4

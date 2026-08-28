@@ -74,12 +74,28 @@ class bridge_axi_monitor #(int DW = 64) extends uvm_component;
       d.wstrb.delete();
       // Accumulate beats until WLAST delimits the burst (length-independent, so
       // it does not need the AW descriptor to have arrived first).
-      forever begin
-        @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_WVALID && vif.S_AXI_WREADY));
-        d.wdata.push_back(pack_dw(vif.S_AXI_WDATA));
-        d.wstrb.push_back(pack_strb(vif.S_AXI_WSTRB));
-        if (vif.S_AXI_WLAST) break;
-      end
+      // The bvalid_arm provides an escape when the bridge terminates early
+      // without WLAST (wlast_err path): once at least one beat is captured,
+      // a rising BVALID signals that no further WREADY beats will come.
+      fork
+        begin : wbeat_arm
+          forever begin
+            @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_WVALID && vif.S_AXI_WREADY));
+            d.wdata.push_back(pack_dw(vif.S_AXI_WDATA));
+            d.wstrb.push_back(pack_strb(vif.S_AXI_WSTRB));
+            if (vif.S_AXI_WLAST) break;
+          end
+        end
+        begin : bvalid_arm
+          // Guard: only let BVALID terminate the accumulation after at least
+          // one beat has been captured, so a BVALID left over from the
+          // previous transaction (before any beat for the new one is seen)
+          // does not prematurely close the descriptor.
+          @(posedge vif.clk iff (vif.rst_n && vif.S_AXI_BVALID &&
+                                 (d.wdata.size() > 0)));
+        end
+      join_any
+      disable fork;
       wd_pend.push_back(d);
     end
   endtask

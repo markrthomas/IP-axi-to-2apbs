@@ -9,7 +9,7 @@
 | RTL | Simple and burst bridge variants; 100% Verilator line coverage |
 | Directed simulation | Icarus: simple, burst, burst-extended, wait-state (1–3), parameterized, stress |
 | Cocotb | 18 tests across simple (5) and burst (13) bridges; runs in CI |
-| UVM environment | Scoreboard, coverage collector, constrained-random sequences (`bridge_rand_seq`, `bridge_stress_seq`), VCS + Xcelium make targets; open-source Verilator flow (`uvm/vlt/`) in progress — see near-term item 0 |
+| UVM environment | Scoreboard, coverage collector, constrained-random sequences (`bridge_rand_seq`, `bridge_stress_seq`), VCS + Xcelium make targets; open-source Verilator flow (`uvm/vlt/`) **green in CI** — all tops (`simple`, `burst`, `burst_ext`, `parameterized`, regblock tests) build and run scoreboard-clean on Verilator 5.050 |
 | Formal | SymbiYosys BMC (simple depth 30, burst depth 50) + cover; safety + liveness; all 4 proofs pass; CI gated |
 | Coverage | Verilator C++ harnesses; 100% line; HTML report via `make cov-report`; exclusions documented in `doc/coverage_notes.md` |
 | CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact |
@@ -19,7 +19,7 @@
 
 ## Near-term
 
-### 0 — UVM on open-source Verilator (`uvm/vlt/`) — IN PROGRESS
+### ~~0 — UVM on open-source Verilator (`uvm/vlt/`)~~ ✓ DONE 2026-08-28
 
 **What:** Run the *same* SystemVerilog UVM env (`uvm/sv`, `uvm/tb`) under
 open-source Verilator 5.050 (the first Verilator that can elaborate/run UVM) with
@@ -28,40 +28,14 @@ alongside the VCS/Xcelium flows. Verilator's `--timing` scheduler resolves some
 constructs differently from VCS, so the env carries `` `ifndef VERILATOR ``
 guards where behavior must diverge.
 
-**Status (2026-08-28):**
-
-- `uvm/vlt/Makefile` builds each UVM top with `--binary --timing --vpi`
-  (`BUILD_JOBS=1`, `--CFLAGS -O0` as RAM-safe defaults); `make lint`/`lint-<top>`
-  do an elaborate-only smoke check (~330 MB peak). The `run` recipe parses the
-  UVM report and fails the target on any `UVM_ERROR`/`UVM_FATAL` (or a missing
-  report), so a scoreboard mismatch is a hard failure rather than a silent pass.
-- Env ported for Verilator: monitor channels decoupled
-  (`bridge_axi_monitor.sv`); coverage collector excluded under Verilator
-  (`bridge_cov_collector.sv`, `bridge_env.sv`, `bridge_uvm_env_pkg.sv`);
-  virtual-interface / factory / cast-form adjustments in `bridge_uvm_tests_pkg.sv`,
-  `bridge_rand_stim.sv`, `bridge_scoreboard.sv`.
-- **Full `--binary` build + run confirmed locally.** `simple` and `burst` both
-  build and run **scoreboard-clean** (`axi_wr=2 axi_rd=2 apb0=2 apb1=2 mism=0`,
-  `UVM_ERROR: 0`, `UVM_FATAL: 0`). The earlier OOM was the single-threaded
-  RAM-safe default, not a hard ceiling: `BUILD_JOBS=N` with `--CFLAGS -O0`
-  completes on the 8 GB host.
-
-**Remaining work items:**
-
-- CI: `.github/workflows/verilator-sim.yml` builds UVM-capable Verilator 5.050
-  from source and runs `make -C uvm/vlt lint` + `simple` + `burst`. ✓ simple and
-  burst confirmed green (build + gated run).
-- Extend the passing run to the remaining tops: `burst_ext`, `parameterized`,
-  and the `regblock` tests.
-- ✓ Reconciled the `` `ifndef VERILATOR `` divergences for simple/burst: the
-  Verilator run checks the same scoreboard invariants as VCS (all `pred_*`/
-  `buf_*` queues drain to zero, `mism=0`) despite the decoupled monitor and
-  excluded coverage collector. Confirm this holds for the remaining tops as they
-  are enabled.
-
-**Exit:** `make -C uvm/vlt simple` builds and runs green in CI on Verilator
-5.050; the divergences are documented; baseline table updated to list Verilator
-as a supported UVM simulator.
+**Completed (2026-08-28):** All UVM tops build and run scoreboard-clean on
+Verilator 5.050 in CI (`tb_uvm_simple`, `tb_uvm_burst`, `tb_uvm_burst_ext`,
+`tb_uvm_parameterized`, and all four `tb_uvm_regblock` tests). The `run` recipe
+fails on any `UVM_ERROR`/`UVM_FATAL`. The `regblock_cov_collector` covergroup
+class was excluded under Verilator (`` `ifndef VERILATOR `` guard in
+`regblock_uvm_env_pkg.sv`), matching the pattern used for `bridge_cov_collector`.
+Scoreboard invariants confirmed equivalent to VCS for all tops. Divergences
+documented in `uvm/vlt/README.md`.
 
 ---
 
