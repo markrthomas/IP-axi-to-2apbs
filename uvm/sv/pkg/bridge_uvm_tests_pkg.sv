@@ -23,6 +23,8 @@ package bridge_uvm_tests_pkg;
       super.build_phase(phase);
       
       env_cfg = bridge_env_cfg::type_id::create("env_cfg");
+      env_cfg.data_width = DW;
+      env_cfg.addr_width = 32;
       configure_env();
       uvm_config_db #(bridge_env_cfg)::set(this, "env", "cfg", env_cfg);
 
