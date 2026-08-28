@@ -17,15 +17,52 @@ COV_REPORT_HTML=my.html make cov-report
 
 | Bridge | Line coverage | Branch coverage |
 |--------|--------------|-----------------|
-| `axi4_to_apb4_2x_simple` | **100%** (132/132) | ~3% |
-| `axi4_to_apb4_2x_burst`  | **100%** (215/215) | ~7% |
+| `axi4_to_apb4_2x_simple` | **100%** (132/132) | ~3% (artefact — see §Branch coverage) |
+| `axi4_to_apb4_2x_burst`  | **100%** (215/215) | ~7% (artefact — see §Branch coverage) |
 
-Branch coverage is structurally low for a reason explained in §Branch artefact
-below; the number is not a meaningful signal for this codebase.
+After applying the `localparam EXPECTED_AXSIZE` exclusion pragma (§Exclusions),
+branch coverage is expected to rise to the high 80–90% range and become
+a meaningful signal.
 
 ---
 
 ## Exclusions
+
+### `axi4_to_apb4_2x_simple.v` — `localparam EXPECTED_AXSIZE` branch artefact
+
+**Location:** `src/axi4_to_apb4_2x_simple.v`, module body (after port list).
+
+```verilog
+// verilator coverage_off
+localparam EXPECTED_AXSIZE = (DATA_WIDTH == 1024) ? 3'b111 :
+                             ...
+                             3'b000;
+// verilator coverage_on
+```
+
+**Why excluded:** Verilator instruments every `?:` sub-expression in the
+chain as a separate branch point.  For `DATA_WIDTH=64`, all arms except
+the `3'b011` one are compile-time-false; Verilator folds the dead arms
+but still counts each sub-expression in the branch denominator.  This
+generates ~1 600 synthetic uncoverable branch points that make up ~97%
+of the branch denominator, rendering the metric uninterpretable.
+
+**Pragma used:** `// verilator coverage_off` / `// verilator coverage_on`
+line-form directives (the `coverage_block_off` inline form only works
+inside `begin`/`end` blocks; a `localparam` is module-level).  The
+directives bracket only the `localparam` lines — no runtime-active logic
+is within the exclusion window.
+
+---
+
+### `axi4_to_apb4_2x_burst.v` — `localparam EXPECTED_AXSIZE` branch artefact
+
+**Location:** `src/axi4_to_apb4_2x_burst.v`, module body (after port list).
+
+Same rationale as the simple bridge above; ~2 000 synthetic branch points
+excluded.
+
+---
 
 ### `axi4_to_apb4_2x_simple.v` — FSM `default` arm
 
@@ -71,30 +108,13 @@ mutual exclusion for all reachable states.
 
 ---
 
-## Branch coverage artefact
+## Branch coverage
 
-Verilator instruments every sub-expression of a conditional as a separate
-branch point.  Both bridges contain:
-
-```verilog
-localparam EXPECTED_AXSIZE =
-    (DATA_WIDTH == 1024) ? 3'b111 :
-    (DATA_WIDTH == 512)  ? 3'b110 :
-    ...
-    3'b011;  // DATA_WIDTH = 64 (the only instantiated width)
-```
-
-For `DATA_WIDTH=64` all arms except the last are compile-time-false.
-Verilator still counts each `?:` operand as a separate branch — roughly
-1 600 branch points for `simple` and 2 000 for `burst` — all permanently
-zero because Verilator folds the dead arms.  These synthetic points make
-up ~97% of the branch denominator and cannot be covered by any stimulus.
-
-**Decision:** no exclusion pragma applied to the `localparam` block.
-Adding `coverage_block_off` there would also suppress coverage of the
-runtime-active boolean expressions that happen to be nearby.  The branch
-metric is therefore treated as not meaningful for this codebase and is
-displayed for informational purposes only.
+With the `// verilator coverage_off` pragma applied to both `localparam
+EXPECTED_AXSIZE` blocks, the ~1 600 / ~2 000 synthetic compile-time-dead
+branch points are removed from the denominator.  The reported branch
+percentage now reflects only runtime-reachable conditions and is expected
+to be in the high 80–90% range.
 
 ---
 

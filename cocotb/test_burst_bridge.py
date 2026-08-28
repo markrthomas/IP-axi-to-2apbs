@@ -8,10 +8,13 @@ Key behaviors under test:
   - Multi-beat INCR bursts (all beats target same slave).
   - A 2-beat burst starting at 0x7FFF_FFF8 crosses the APB_ADDR_BIT=31 boundary
     and must be rejected with DECERR (no APB access, no side effects).
+  - Back-to-back transactions with different AXI IDs serialize correctly
+    (P10: single-outstanding-transaction guarantee).
 """
 
 import cocotb
 from cocotb.clock import Clock
+from cocotb.triggers import RisingEdge
 
 from env import (AXI4Driver, BRESP_OKAY, BRESP_SLVERR, BRESP_DECERR, RRESP_OKAY,
                  reset_dut, start_slaves)
@@ -363,3 +366,108 @@ async def test_missing_wlast_no_deadlock(dut):
     # awlen=1 => 2 beats expected; wlast_at=99 => WLAST never asserted.
     bresp = await axi.burst_write_wlast_at(0x0000_0A00, awlen=1, wlast_at=99)
     assert bresp == BRESP_SLVERR, f"Missing-WLAST BRESP: {bresp} (expected SLVERR)"
+
+
+@cocotb.test()
+async def test_id_serialization(dut):
+    """Back-to-back AW transactions with different IDs must fully serialize.
+
+    Issue AW+W for ID=1 and withhold BREADY so the bridge stays busy.
+    While ID=1 is still in-flight, immediately assert AWVALID for ID=2.
+    The bridge must hold AWREADY low for ID=2 until after the BVALID+BREADY
+    handshake for ID=1 completes (property P10: single-outstanding-transaction).
+    """
+    clk = dut.ACLK
+    cocotb.start_soon(Clock(clk, 10, units="ns").start())
+    await reset_dut(dut, clk)
+    start_slaves(dut, clk)
+
+    # --- Transaction 1: single-beat write, ID=1 ---
+    # Deliberately withhold BREADY so TX1 stays in the B-response phase
+    # while we assert the second AW.
+    dut.S_AXI_AWID.value    = 1
+    dut.S_AXI_AWADDR.value  = 0x0000_1000
+    dut.S_AXI_AWLEN.value   = 0
+    dut.S_AXI_AWSIZE.value  = 0b011
+    dut.S_AXI_AWBURST.value = 0b01
+    dut.S_AXI_AWPROT.value  = 0
+    dut.S_AXI_AWVALID.value = 1
+    dut.S_AXI_WDATA.value   = 0xAAAA_BBBB_CCCC_DDDD
+    dut.S_AXI_WSTRB.value   = 0xFF
+    dut.S_AXI_WLAST.value   = 1
+    dut.S_AXI_WVALID.value  = 1
+    dut.S_AXI_BREADY.value  = 0  # hold off until we check serialization
+
+    aw1_done = False
+    w1_done  = False
+    for _ in range(64):
+        await RisingEdge(clk)
+        if not aw1_done and int(dut.S_AXI_AWREADY.value):
+            dut.S_AXI_AWVALID.value = 0
+            aw1_done = True
+        if not w1_done and int(dut.S_AXI_WREADY.value):
+            dut.S_AXI_WVALID.value = 0
+            w1_done = True
+        if aw1_done and w1_done:
+            break
+    else:
+        raise AssertionError("Timeout: AW1/W1 handshakes did not complete")
+
+    # --- Transaction 2: immediately assert AW/W for ID=2 ---
+    # The bridge must keep AWREADY=0 while TX1 is outstanding.
+    dut.S_AXI_AWID.value    = 2
+    dut.S_AXI_AWADDR.value  = 0x0000_2000
+    dut.S_AXI_AWLEN.value   = 0
+    dut.S_AXI_AWSIZE.value  = 0b011
+    dut.S_AXI_AWBURST.value = 0b01
+    dut.S_AXI_AWPROT.value  = 0
+    dut.S_AXI_AWVALID.value = 1
+    dut.S_AXI_WDATA.value   = 0x1111_2222_3333_4444
+    dut.S_AXI_WSTRB.value   = 0xFF
+    dut.S_AXI_WLAST.value   = 1
+    dut.S_AXI_WVALID.value  = 1
+
+    # --- Monitor: AW2 must not be accepted before B1 completes ---
+    b1_complete   = False   # True once BVALID && BREADY for TX1
+    aw2_accepted  = False   # True once AWREADY fires for TX2
+    aw2_before_b1 = False   # True if the above ordering is violated
+    w2_accepted   = False
+    b2_complete   = False
+
+    for _ in range(256):
+        await RisingEdge(clk)
+
+        # Detect AW2 accepted
+        if not aw2_accepted and int(dut.S_AXI_AWVALID.value) and int(dut.S_AXI_AWREADY.value):
+            if not b1_complete:
+                aw2_before_b1 = True
+            aw2_accepted = True
+            dut.S_AXI_AWVALID.value = 0
+
+        # Accept W2 whenever WREADY fires
+        if not w2_accepted and int(dut.S_AXI_WVALID.value) and int(dut.S_AXI_WREADY.value):
+            dut.S_AXI_WVALID.value = 0
+            dut.S_AXI_WLAST.value  = 0
+            w2_accepted = True
+
+        # Manage BREADY: drive it to accept whichever BVALID is asserted
+        if int(dut.S_AXI_BVALID.value):
+            dut.S_AXI_BREADY.value = 1
+        else:
+            if int(dut.S_AXI_BREADY.value):
+                # BREADY was 1 last cycle and BVALID went away: handshake done
+                if not b1_complete:
+                    b1_complete = True
+                else:
+                    b2_complete = True
+            dut.S_AXI_BREADY.value = 0
+
+        if b2_complete:
+            break
+
+    assert b1_complete, "Timeout: never saw BVALID for TX1"
+    assert aw2_accepted, "Timeout: AWREADY never granted for TX2 (ID=2)"
+    assert not aw2_before_b1, (
+        "SERIALIZATION VIOLATION: AWREADY granted to ID=2 before "
+        "BVALID+BREADY for ID=1 — single-outstanding-transaction guarantee broken"
+    )
