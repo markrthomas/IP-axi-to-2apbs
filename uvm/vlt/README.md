@@ -74,6 +74,49 @@ down the whole session/VM**. Options:
   use the real header from `UVM_HOME` and never see this file).
 - `obj/` — build output (gitignored).
 
+## Docker / Railway — run the heavy build off-box
+
+The `--binary` build OOMs an ~8 GB host (see above). Besides GitHub Actions, the
+repo-root **`Dockerfile`** packages the whole flow — it builds UVM-capable
+Verilator 5.050 from source, bundles the UVM library at `UVM_HOME`, and its
+entrypoint (`docker/entrypoint.sh`) runs `make -C uvm/vlt ci` (lint + every top,
+scoreboard/`UVM_ERROR` gated). Run it on any RAM-generous container host;
+[Railway](https://railway.com) is wired up via the repo-root `railway.toml`.
+(This mirrors the sibling `axi-on-ucie-to-mem` image, except that flow pins
+oss-cad-suite's Verilator — here we must build 5.050 from source because the
+oss-cad-suite Verilator is not UVM-capable.)
+
+```sh
+# Local container run (needs a host with enough RAM for the --binary build):
+make docker-uvm-build          # build the image (root Dockerfile)
+make docker-uvm-run            # build + run the full UVM gate in the container
+#   DOCKER=podman  UVM_IMAGE=name:tag   # override the CLI / image tag
+
+# One top only (entrypoint injects VERILATOR/UVM_HOME/BUILD_JOBS):
+docker run --rm ip-axi-2apbs-uvm:latest make simple
+
+# Railway (one-shot job; restartPolicy NEVER in railway.toml):
+railway login && railway link   # once, to select the project/service
+make railway-deploy             # railway up — builds the Dockerfile in the cloud
+make railway-logs               # tail the run
+```
+
+Container/cloud specifics baked into the image + entrypoint:
+
+- **`VERILATOR_ROOT` unset** — the launcher derives its root from the bundled
+  install; the entrypoint drops any stale value defensively (a stale one
+  hard-errors the launcher — see above).
+- **`BUILD_JOBS=2` default** — cloud builders advertise many cores but little
+  RAM, so the `--binary` compile at `-j $(nproc)` OOM-kills `g++`. Override with
+  `-e BUILD_JOBS=N`.
+- **Railway log filter** — the build echoes a ~500-char `g++` line per generated
+  file (thousands of files); Railway rate-limits log ingestion, so on Railway
+  (auto-detected) the entrypoint forwards only signal lines (UVM report lines,
+  banners, errors, PASS/FAIL) and tail-dumps the full transcript on failure.
+  Override with `-e UVM_CI_QUIET=1/0`.
+- **`z3`** is installed for run-time constraint solving; a **UTF-8 locale** is
+  forced so non-ASCII report output does not crash on a C/POSIX log sink.
+
 ## Verilator-specific divergences in the shared env
 
 The shared UVM sources carry `` `ifndef VERILATOR `` guards where behavior must

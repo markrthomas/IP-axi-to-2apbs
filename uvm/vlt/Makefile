@@ -95,12 +95,18 @@ define lint
 	  $(UVM_HDR) $(2) $(COMMON) $(TB)/$(1).sv
 endef
 
-.PHONY: all simple burst burst_ext parameterized \
+.PHONY: all ci simple burst burst_ext parameterized \
         regblock regblock-hw-reset regblock-bit-bash regblock-reg-access \
-        regblock-directed lint lint-simple lint-burst lint-burst_ext \
+        regblock-directed regblock-all lint lint-simple lint-burst lint-burst_ext \
         lint-parameterized lint-regblock clean
 
 all: simple burst burst_ext parameterized
+
+# Full license-free gate: elaborate-only lint of every top, then build + run
+# each top with the scoreboard/UVM_ERROR gate (all four regblock tests against
+# a single regblock build).  This is what the Docker/Railway image runs by
+# default — see Dockerfile and the repo-root railway.json.
+ci: lint all regblock-all
 
 # lint every UVM top (elaborate-only; RAM-safe CI smoke check)
 lint: lint-simple lint-burst lint-burst_ext lint-parameterized lint-regblock
@@ -166,6 +172,14 @@ regblock-bit-bash: regblock
 regblock-reg-access: regblock
 	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_reg_access)
 regblock-directed: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_directed)
+
+# Build the regblock top once, then run all four register tests against it
+# (avoids four full --binary rebuilds).
+regblock-all: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_hw_reset)
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_bit_bash)
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_reg_access)
 	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_directed)
 
 clean:

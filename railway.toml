@@ -1,0 +1,30 @@
+# Railway (railway.com) config-as-code — build the UVM image and run the gate.
+# https://docs.railway.com/reference/config-as-code
+#
+# This project is a hardware DV suite, not a web service: it has no listening
+# port.  The container runs `make -C uvm/vlt ci` (lint + every UVM top under
+# open-source Verilator, scoreboard/UVM_ERROR-gated) and exits with the gate's
+# status (0 = green).  Deploy it as a one-off / scheduled job, not an always-on
+# service.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Batch job: don't restart on exit.  (A normal always-on service that exits 0 is
+# flagged "crashed" by Railway — NEVER is correct for a run-to-completion gate.)
+restartPolicyType = "NEVER"
+numReplicas = 1
+
+# Do NOT set startCommand: the image's ENTRYPOINT (docker/entrypoint.sh) runs
+# `make -C uvm/vlt ci` with the bundled-Verilator overrides injected and the
+# Railway log-volume filter applied.  A Railway startCommand runs via `sh -c`,
+# bypassing that wrapper and dropping both.
+
+# Optional: run the gate on a schedule instead of once per deploy.  Railway cron
+# is fixed UTC (no daylight saving) and starts a fresh container per tick; this
+# gate runs to completion and exits, so it fits.  Left commented so a deploy does
+# not silently start billing scheduled cloud runs — uncomment to enable.
+# 09:00 UTC = 02:00 MST (UTC-7); during MDT (UTC-6) it lands at 03:00 local.
+# cronSchedule = "0 9 * * *"

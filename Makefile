@@ -183,6 +183,14 @@ help:
 	@echo "    make pyuvm-wave-view              # pyuvm-waves, then open the trace in GTKWave"
 	@echo "    PYUVM_SEED=<n> make pyuvm-waves   # reproduce a specific random trace"
 	@echo ""
+	@echo ""
+	@echo "  Docker / Railway (license-free UVM on Verilator in a container):"
+	@echo "    make docker-uvm-build             # build image (uvm/vlt/Dockerfile)"
+	@echo "    make docker-uvm-run               # build + run the full UVM gate in a container"
+	@echo "    make railway-deploy               # railway up (needs: railway login && railway link)"
+	@echo "    make railway-logs                 # tail the Railway deployment logs"
+	@echo "    UVM_IMAGE=name:tag  DOCKER=podman  RAILWAY=railway"
+	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
 # --- tests -------------------------------------------------------------------
@@ -621,7 +629,36 @@ pyuvm-wave-view: pyuvm-waves
 ci: regress coverage check-uvm-mirror cocotb
 	@echo "[CI] All gates passed."
 
-.PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
+# --- Docker / Railway: license-free UVM on Verilator in a container ----------
+# Builds an image with UVM-capable Verilator 5.050 + the bundled UVM library
+# (root Dockerfile) whose entrypoint runs the full UVM gate (make -C uvm/vlt ci).
+# Useful where the local host lacks the RAM for the --binary build: run it on
+# Railway (or any container host) instead. See uvm/vlt/README.md.
+DOCKER         ?= docker
+RAILWAY        ?= railway
+UVM_IMAGE      ?= ip-axi-2apbs-uvm:latest
+UVM_DOCKERFILE := Dockerfile
+
+docker-uvm-build:
+	@command -v $(DOCKER) >/dev/null 2>&1 || { echo "[DOCKER] '$(DOCKER)' not found; install Docker or Podman (or set DOCKER=)"; exit 127; }
+	$(DOCKER) build -f $(UVM_DOCKERFILE) -t $(UVM_IMAGE) .
+
+# NOTE: the --binary build is RAM-heavy; on a small (~8 GB) host this can OOM.
+# The point of this path is to run it on a RAM-generous host (Railway).
+docker-uvm-run: docker-uvm-build
+	$(DOCKER) run --rm $(UVM_IMAGE)
+
+railway-deploy:
+	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
+	@echo "[RAILWAY] Deploying via $(UVM_DOCKERFILE) (railway.toml). Requires: railway login && railway link."
+	$(RAILWAY) up
+
+railway-logs:
+	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
+	$(RAILWAY) logs
+
+.PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator \
+	docker-uvm-build docker-uvm-run railway-deploy railway-logs
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \

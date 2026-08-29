@@ -1,0 +1,26 @@
+# Keep the Docker build context small (the root Dockerfile copies the repo).
+.git
+.github
+**/obj
+uvm/vlt/obj
+obj_dir_*
+sim_simple
+sim_burst
+sim_burst_ext
+sim_simple_ws_*
+sim_param
+sim_stress
+sim_regblock
+**/sim_build
+**/__pycache__
+*.vcd
+*.fst
+*.info
+*.pdf
+coverage_report.html
+perf_report.html
+perf_metrics.txt
+# Local-only tooling / notes
+.mcp.json
+NOTES
+.codex
