@@ -12,7 +12,8 @@
 | UVM environment | Scoreboard, coverage collector, constrained-random sequences (`bridge_rand_seq`, `bridge_stress_seq`), VCS + Xcelium make targets; open-source Verilator flow (`uvm/vlt/`) **green in CI** — all tops (`simple`, `burst`, `burst_ext`, `parameterized`, regblock tests) build and run scoreboard-clean on Verilator 5.050 |
 | Formal | SymbiYosys BMC (simple depth 30, burst depth 50) + cover; safety + liveness; all 4 proofs pass; CI gated |
 | Coverage | Verilator C++ harnesses; 100% line; HTML report via `make cov-report`; exclusions documented in `doc/coverage_notes.md` |
-| CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact. Separate `UVM on Verilator` workflow (`verilator-sim.yml`) builds Verilator 5.050 from source and runs all UVM tops, gated on `UVM_ERROR`/`UVM_FATAL` |
+| CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact. Separate `UVM on Verilator` workflow (`verilator-sim.yml`) builds Verilator 5.050 from source and runs all UVM tops, gated on `UVM_ERROR`/`UVM_FATAL`. `docker-plumbing.yml` (fast: shell + entrypoint dispatch + watcher self-test on every push) and `docker-image.yml` (path-gated: builds the image, exercises the entrypoint) cover the container plumbing |
+| Container / off-box compute | Repo-root `Dockerfile` + `docker/entrypoint.sh` + `railway.toml` package the UVM-on-Verilator gate; `make railway-run` deploys to Railway (Hobby, ~8 GB) and returns PASS/FAIL on its own; a startup **resource preflight** fails fast below the RAM floor (the UVM PCH compile needs several GB). See `uvm/vlt/README.md` |
 | Documentation | `design_contract.md`, `stress_test.md`, `coverage_notes.md`, UVM READMEs, PDF targets |
 
 ---
@@ -108,6 +109,71 @@ with a per-port countdown (`g_ws_cnt0/1`) controlled by a global `g_wait_states`
 variable (default 0, zero-wait-state behaviour unchanged). Added test cases 12
 (simple) and 16 (burst) that set `g_wait_states = 2` and run one write + one
 read (or 4-beat burst read) through the PREADY polling loop.
+
+---
+
+### ~~7 — Containerized UVM-on-Verilator gate (Docker / Railway)~~ ✓ DONE 2026-08-29
+
+**What:** Run the `uvm/vlt` license-free gate off-box, since the `--binary` UVM
+build OOMs a RAM-constrained (~8 GB) local host. Package the flow so it runs on
+any RAM-generous container host and, in particular, on [Railway](https://railway.com).
+
+**Completed (2026-08-29):** Repo-root `Dockerfile` (multi-stage: builds
+UVM-capable Verilator 5.050 from source, bundles the Accellera UVM library),
+`docker/entrypoint.sh` (injects toolchain overrides, filters the chatty build
+log under Railway's rate limit, and **fails fast via a cgroup resource preflight**
+below the RAM floor), and `railway.toml`. Makefile targets `docker-uvm-build`/
+`docker-uvm-run`, `railway-deploy`/`railway-logs`, and the one-shot `railway-run`
+(login/link + up + a `docker/railway-watch.sh` poller that returns a PASS/FAIL
+banner and matching exit code). Validated green end-to-end on Railway Hobby
+(8 GB): full `ci` gate — lint + all tops + all four regblock tests — exits 0.
+Plumbing is CI-tested (`docker-plumbing.yml`, `docker-image.yml`; `make
+check-docker`). RAM findings and knobs (`BUILD_JOBS`, `VL_BUILD_JOBS`,
+`CFLAGS_MODEL`, `UVM_MIN_MEM_MB`) documented in `uvm/vlt/README.md`.
+
+---
+
+### 8 — Unified metrics collection + HTML dashboard (compare & contrast)
+
+**What:** There is no single place that aggregates the suite's verification and
+performance metrics, and nothing captures *where/how* a run executed. Build one
+report that both (a) rolls up results across every flow — directed SV (Icarus),
+cocotb/pyUVM, the UVM tops on Verilator, formal, and coverage — and (b) compares
+and contrasts the same work across **run environments**: the local box, the
+Docker container, Railway, and GitHub CI (build time, peak RAM, walltime, sim
+speed, pass/fail). Emit a self-contained HTML dashboard.
+
+Modeled on `~/proj/ucie_rdi_to_pcie6_pipe7` (`scripts/gen_report.py` +
+`report/{metrics.json,report.md,report.html}`, driven by `make report` /
+`make report_check`, with an advisory `scripts/report_thresholds.json`).
+
+**Work items:**
+
+- `scripts/gen_report.py` — aggregate, with graceful degradation on missing
+  inputs:
+  - **Coverage:** `coverage.info` (LCOV) → total + per-DUT-file line/branch %.
+  - **UVM tops:** each `uvm/vlt/obj/<top>/run.log` → `UVM_INFO/WARNING/ERROR/
+    FATAL` counts, and the Verilator `$finish` line → sim walltime / speed.
+  - **Formal:** SymbiYosys log → per-proof PASS/FAIL + depth.
+  - **cocotb:** `results.xml` (JUnit) → per-test pass/fail + timing.
+  - **Directed SV:** regress log → `[TAG] PASS` matrix + `[PERF]` lines.
+- **Run-environment metadata** (the compare/contrast axis): capture build time,
+  peak RSS (`/usr/bin/time -v` or cgroup peak), walltime, and pass/fail per
+  environment. The container entrypoint emits a `metrics.json` fragment from the
+  gate run so local / container / Railway / CI runs feed the same schema and can
+  be diffed side by side (e.g. `tb_uvm_simple` build RAM: local vs Railway vs CI).
+- **Outputs:** `report/{metrics.json, report.md, report.html}`; the HTML has a
+  per-flow results table, a coverage table, and a run-environment compare/contrast
+  section.
+- **Targets:** `make report` (run the flows into `report/logs/`, then aggregate)
+  and `make report_check` (advisory perf/quality threshold gate over
+  `report/metrics.json` — **not** part of the required `ci` gate; a sim-timing
+  wobble must not red the build).
+- **CI:** upload `report.html` as an artifact; have the container `docker-image`
+  path and/or a report job produce it.
+
+**Exit:** `make report` produces `report/report.html` summarizing every flow and
+comparing the run environments; the report is published as a CI artifact.
 
 ---
 

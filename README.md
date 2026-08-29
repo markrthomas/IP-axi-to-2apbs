@@ -40,7 +40,8 @@ behavior is specified in [`doc/design_contract.md`](doc/design_contract.md).
 
 - `src/` - canonical RTL entrypoints for the bridges
 - `test/` - canonical testbench entrypoints
-- `uvm/` - UVM-based verification environment (VCS and Xcelium targets)
+- `uvm/` - UVM-based verification environment (VCS and Xcelium targets); `uvm/vlt/` is the license-free open-source Verilator UVM flow
+- `Dockerfile`, `docker/`, `railway.toml` - containerized UVM-on-Verilator gate for off-box / cloud (Railway) runs (see `uvm/vlt/README.md`)
 - `doc/` - documentation
 
 ## Design contract
@@ -62,8 +63,14 @@ flows run from the repo root (each degrades gracefully if its tool is absent):
 | Formal | `make formal` | SymbiYosys BMC + cover (safety + liveness) proofs. |
 | Coverage | `make cov-report` / `make cov-html` | Verilator line/branch coverage → terminal table + self-contained HTML report. |
 | Performance | `make perf` / `make perf-html` | Benchmarks the burst bridge and reports simulation speed and design cycles-per-beat / sustained bandwidth. |
+| UVM on Verilator | `make -C uvm/vlt lint` / `simple` / `ci` | License-free UVM env under open-source Verilator 5.050 (`uvm/vlt/README.md`). |
+| Container / cloud | `make docker-uvm-run` / `make railway-run` | Run the full UVM gate off-box in Docker or on Railway (one-shot deploy that returns PASS/FAIL); `make check-docker` runs the offline plumbing tests. |
 
 Reproduce a specific random wave trace with `PYUVM_SEED=<n> make pyuvm-waves`.
+
+A **unified metrics dashboard** — one HTML report aggregating every flow above and
+comparing runs across environments (local / container / Railway / CI) — is planned
+as near-term item 8 in [`doc/PLAN.md`](doc/PLAN.md).
 
 ## Xcelium Tutorial
 

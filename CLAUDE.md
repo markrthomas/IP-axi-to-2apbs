@@ -54,6 +54,14 @@ Key facts an agent must know before working here:
 
 ## Next steps (optional, none blocking)
 
+- ✓ **Containerized UVM-on-Verilator gate (Docker / Railway) — DONE 2026-08-29**
+  (PLAN item 7). Runs green end-to-end on Railway Hobby (8 GB); plumbing CI-tested
+  (`docker-plumbing.yml`, `docker-image.yml`, `make check-docker`). Details +
+  RAM knobs in `uvm/vlt/README.md`.
+- **Current near-term focus: PLAN item 8 — unified metrics dashboard.** Aggregate
+  every flow + compare/contrast run environments (local/container/Railway/CI) into
+  `report/{metrics.json,report.md,report.html}` (`make report`/`report_check`),
+  modeled on `~/proj/ucie_rdi_to_pcie6_pipe7`.
 - ✓ CI runs all UVM tops (`simple`, `burst`, `burst_ext`, `parameterized`,
   `regblock-*`), all gated on `UVM_ERROR`/`UVM_FATAL`.
 - Scoreboard invariants confirmed equivalent to VCS for all tops; coverage
