@@ -82,7 +82,8 @@ Verilator 5.050 from source, bundles the UVM library at `UVM_HOME`, and its
 entrypoint (`docker/entrypoint.sh`) runs `make -C uvm/vlt ci` (lint + every top,
 scoreboard/`UVM_ERROR` gated). Run it on a RAM-generous container host (**~8 GB**
 — see the RAM floor below); [Railway](https://railway.com) (Hobby plan) is wired
-up via the repo-root `railway.toml`.
+up via the repo-root `.railway/railway.ts` (Railway Infrastructure as Code;
+validate/apply with `npm install railway && railway config plan`).
 (This mirrors the sibling `axi-on-ucie-to-mem` image, except that flow pins
 oss-cad-suite's Verilator — here we must build 5.050 from source because the
 oss-cad-suite Verilator is not UVM-capable.)
@@ -96,7 +97,7 @@ make docker-uvm-run            # build + run the full UVM gate in the container
 # One top only (entrypoint injects VERILATOR/UVM_HOME/BUILD_JOBS):
 docker run --rm ip-axi-2apbs-uvm:latest make simple
 
-# Railway (one-shot job; restartPolicy NEVER in railway.toml):
+# Railway (one-shot job; restartPolicy NEVER in .railway/railway.ts):
 make railway-run                # END TO END: login/link (first run) + up, then wait
 #   and return to your prompt with a PASS/FAIL banner (no manual Ctrl-C).  Exits
 #   non-zero on a red gate.  Raise the service memory limit to ~8 GB first

@@ -1,6 +1,8 @@
 # Keep the Docker build context small (the root Dockerfile / Dockerfile.dev copy the repo).
 .git
 .github
+.railway
+node_modules
 .vscode
 **/obj
 uvm/vlt/obj

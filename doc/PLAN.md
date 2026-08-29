@@ -13,7 +13,7 @@
 | Formal | SymbiYosys BMC (simple depth 30, burst depth 50) + cover; safety + liveness; all 4 proofs pass; CI gated |
 | Coverage | Verilator C++ harnesses; 100% line; HTML report via `make cov-report`; exclusions documented in `doc/coverage_notes.md` |
 | CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact. Separate `UVM on Verilator` workflow (`verilator-sim.yml`) builds Verilator 5.050 from source and runs all UVM tops, gated on `UVM_ERROR`/`UVM_FATAL`. `docker-plumbing.yml` (fast: shell + entrypoint dispatch + watcher self-test on every push) and `docker-image.yml` (path-gated: builds the image, exercises the entrypoint) cover the container plumbing |
-| Container / off-box compute | Repo-root `Dockerfile` + `docker/entrypoint.sh` + `railway.toml` package the UVM-on-Verilator gate; `make railway-run` deploys to Railway (Hobby, ~8 GB) and returns PASS/FAIL on its own; a startup **resource preflight** fails fast below the RAM floor (the UVM PCH compile needs several GB). See `uvm/vlt/README.md` |
+| Container / off-box compute | Repo-root `Dockerfile` + `docker/entrypoint.sh` + `.railway/railway.ts` (Railway Infrastructure as Code) package the UVM-on-Verilator gate; `make railway-run` deploys to Railway (Hobby, ~8 GB) and returns PASS/FAIL on its own; a startup **resource preflight** fails fast below the RAM floor (the UVM PCH compile needs several GB). See `uvm/vlt/README.md` |
 | Documentation | `design_contract.md`, `stress_test.md`, `coverage_notes.md`, UVM READMEs, PDF targets |
 
 ---
@@ -122,7 +122,8 @@ any RAM-generous container host and, in particular, on [Railway](https://railway
 UVM-capable Verilator 5.050 from source, bundles the Accellera UVM library),
 `docker/entrypoint.sh` (injects toolchain overrides, filters the chatty build
 log under Railway's rate limit, and **fails fast via a cgroup resource preflight**
-below the RAM floor), and `railway.toml`. Makefile targets `docker-uvm-build`/
+below the RAM floor), and `.railway/railway.ts` (Railway Infrastructure as Code;
+the deprecated `railway.toml` was migrated via `railway config migrate`). Makefile targets `docker-uvm-build`/
 `docker-uvm-run`, `railway-deploy`/`railway-logs`, and the one-shot `railway-run`
 (login/link + up + a `docker/railway-watch.sh` poller that returns a PASS/FAIL
 banner and matching exit code). Validated green end-to-end on Railway Hobby

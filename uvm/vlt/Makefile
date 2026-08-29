@@ -113,7 +113,7 @@ all: simple burst burst_ext parameterized
 # Full license-free gate: elaborate-only lint of every top, then build + run
 # each top with the scoreboard/UVM_ERROR gate (all four regblock tests against
 # a single regblock build).  This is what the Docker/Railway image runs by
-# default — see Dockerfile and the repo-root railway.json.
+# default — see Dockerfile and the repo-root .railway/railway.ts.
 ci: lint all regblock-all
 
 # lint every UVM top (elaborate-only; RAM-safe CI smoke check)

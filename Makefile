@@ -657,7 +657,7 @@ docker-uvm-run: docker-uvm-build
 
 railway-deploy:
 	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
-	@echo "[RAILWAY] Deploying via $(UVM_DOCKERFILE) (railway.toml). Requires: railway login && railway link."
+	@echo "[RAILWAY] Deploying via $(UVM_DOCKERFILE) (.railway/railway.ts). Requires: railway login && railway link."
 	$(RAILWAY) up
 
 railway-logs:

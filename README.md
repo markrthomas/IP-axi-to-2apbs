@@ -41,7 +41,7 @@ behavior is specified in [`doc/design_contract.md`](doc/design_contract.md).
 - `src/` - canonical RTL entrypoints for the bridges
 - `test/` - canonical testbench entrypoints
 - `uvm/` - UVM-based verification environment (VCS and Xcelium targets); `uvm/vlt/` is the license-free open-source Verilator UVM flow
-- `Dockerfile`, `docker/`, `railway.toml` - containerized UVM-on-Verilator gate for off-box / cloud (Railway) runs (see `uvm/vlt/README.md`); `Dockerfile.dev` is the VS Code devcontainer image (`.devcontainer/`) and `Dockerfile.ci` the full-toolchain CI smoke image (`docker-ci-image.yml`)
+- `Dockerfile`, `docker/`, `.railway/railway.ts` - containerized UVM-on-Verilator gate for off-box / cloud (Railway) runs; `.railway/railway.ts` is Railway Infrastructure as Code (replaces the deprecated `railway.toml`) — see `uvm/vlt/README.md`. `Dockerfile.dev` is the VS Code devcontainer image (`.devcontainer/`) and `Dockerfile.ci` the full-toolchain CI smoke image (`docker-ci-image.yml`)
 - `doc/` - documentation
 
 ## Design contract
