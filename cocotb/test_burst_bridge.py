@@ -14,7 +14,7 @@ Key behaviors under test:
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge
+from cocotb.triggers import RisingEdge, ReadOnly
 
 from env import (AXI4Driver, BRESP_OKAY, BRESP_SLVERR, BRESP_DECERR, RRESP_OKAY,
                  reset_dut, start_slaves)
@@ -414,7 +414,8 @@ async def test_id_serialization(dut):
         raise AssertionError("Timeout: AW1/W1 handshakes did not complete")
 
     # --- Transaction 2: immediately assert AW/W for ID=2 ---
-    # The bridge must keep AWREADY=0 while TX1 is outstanding.
+    # The bridge must keep AWREADY=0 while TX1 is outstanding.  Now allow B
+    # responses through (BREADY=1) so TX1's B can complete and free the bridge.
     dut.S_AXI_AWID.value    = 2
     dut.S_AXI_AWADDR.value  = 0x0000_2000
     dut.S_AXI_AWLEN.value   = 0
@@ -426,48 +427,50 @@ async def test_id_serialization(dut):
     dut.S_AXI_WSTRB.value   = 0xFF
     dut.S_AXI_WLAST.value   = 1
     dut.S_AXI_WVALID.value  = 1
+    dut.S_AXI_BREADY.value  = 1
 
-    # --- Monitor: AW2 must not be accepted before B1 completes ---
-    b1_complete   = False   # True once BVALID && BREADY for TX1
-    aw2_accepted  = False   # True once AWREADY fires for TX2
-    aw2_before_b1 = False   # True if the above ordering is violated
-    w2_accepted   = False
-    b2_complete   = False
+    # --- Monitor: compare the *sampled* handshake cycles (AXI transfers occur at
+    # the rising edge where VALID && READY are both high).  Sample in the ReadOnly
+    # phase so we see each cycle's settled combinational READYs, and deassert the
+    # AW2/W2 VALIDs in the next writable phase after their handshake.  The AW2
+    # handshake edge must be strictly LATER than the B1 handshake edge.
+    b1_edge = aw2_edge = None
+    b_count = cyc = 0
+    clear_aw = clear_w = False
 
     for _ in range(256):
         await RisingEdge(clk)
-
-        # Detect AW2 accepted
-        if not aw2_accepted and int(dut.S_AXI_AWVALID.value) and int(dut.S_AXI_AWREADY.value):
-            if not b1_complete:
-                aw2_before_b1 = True
-            aw2_accepted = True
+        cyc += 1
+        if clear_aw:
             dut.S_AXI_AWVALID.value = 0
-
-        # Accept W2 whenever WREADY fires
-        if not w2_accepted and int(dut.S_AXI_WVALID.value) and int(dut.S_AXI_WREADY.value):
+            clear_aw = False
+        if clear_w:
             dut.S_AXI_WVALID.value = 0
             dut.S_AXI_WLAST.value  = 0
-            w2_accepted = True
+            clear_w = False
 
-        # Manage BREADY: drive it to accept whichever BVALID is asserted
-        if int(dut.S_AXI_BVALID.value):
-            dut.S_AXI_BREADY.value = 1
-        else:
-            if int(dut.S_AXI_BREADY.value):
-                # BREADY was 1 last cycle and BVALID went away: handshake done
-                if not b1_complete:
-                    b1_complete = True
-                else:
-                    b2_complete = True
-            dut.S_AXI_BREADY.value = 0
+        await ReadOnly()   # settled values for THIS cycle
+        aw_hs = int(dut.S_AXI_AWVALID.value) and int(dut.S_AXI_AWREADY.value)
+        w_hs  = int(dut.S_AXI_WVALID.value)  and int(dut.S_AXI_WREADY.value)
+        b_hs  = int(dut.S_AXI_BVALID.value)  and int(dut.S_AXI_BREADY.value)
 
-        if b2_complete:
+        if aw_hs and aw2_edge is None:
+            aw2_edge = cyc
+            clear_aw = True
+        if w_hs:
+            clear_w = True
+        if b_hs:
+            b_count += 1
+            if b_count == 1:
+                b1_edge = cyc
+
+        if aw2_edge is not None and b1_edge is not None:
             break
 
-    assert b1_complete, "Timeout: never saw BVALID for TX1"
-    assert aw2_accepted, "Timeout: AWREADY never granted for TX2 (ID=2)"
-    assert not aw2_before_b1, (
-        "SERIALIZATION VIOLATION: AWREADY granted to ID=2 before "
-        "BVALID+BREADY for ID=1 — single-outstanding-transaction guarantee broken"
+    assert b1_edge  is not None, "Timeout: never saw the B1 (ID=1) handshake"
+    assert aw2_edge is not None, "Timeout: AWREADY never granted for TX2 (ID=2)"
+    assert aw2_edge > b1_edge, (
+        f"SERIALIZATION VIOLATION: AW2 (ID=2) accepted at cycle {aw2_edge}, "
+        f"not strictly after the B1 (ID=1) handshake at cycle {b1_edge} — "
+        "single-outstanding-transaction guarantee broken"
     )
