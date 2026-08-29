@@ -185,7 +185,7 @@ help:
 	@echo ""
 	@echo ""
 	@echo "  Docker / Railway (license-free UVM on Verilator in a container):"
-	@echo "    make railway-run                  # ONE-SHOT: login/link + up + tail the run"
+	@echo "    make railway-run                  # ONE-SHOT: login/link + up + wait for PASS/FAIL"
 	@echo "    make docker-uvm-build             # build image (root Dockerfile)"
 	@echo "    make docker-uvm-run               # build + run the full UVM gate in a container"
 	@echo "    make railway-deploy               # railway up only (needs: railway login && railway link)"
@@ -639,6 +639,7 @@ DOCKER         ?= docker
 RAILWAY        ?= railway
 UVM_IMAGE      ?= ip-axi-2apbs-uvm:latest
 UVM_DOCKERFILE := Dockerfile
+RAILWAY_WATCH  := docker/railway-watch.sh
 
 docker-uvm-build:
 	@command -v $(DOCKER) >/dev/null 2>&1 || { echo "[DOCKER] '$(DOCKER)' not found; install Docker or Podman (or set DOCKER=)"; exit 127; }
@@ -671,8 +672,8 @@ railway-run:
 	@$(RAILWAY) status   >/dev/null 2>&1 || $(RAILWAY) link
 	@echo "[RAILWAY] Uploading + building $(UVM_DOCKERFILE), then running the UVM gate (build logs at the URL below)..."
 	$(RAILWAY) up --detach
-	@echo "[RAILWAY] Deploy queued. Tailing run logs — Ctrl-C stops the tail; the cloud run keeps going."
-	-$(RAILWAY) logs
+	@echo "[RAILWAY] Deploy queued; watching for completion — returns to your prompt with PASS/FAIL when the run ends."
+	@RAILWAY='$(RAILWAY)' bash $(RAILWAY_WATCH)
 
 .PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator \
 	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run
