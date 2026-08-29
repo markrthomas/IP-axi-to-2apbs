@@ -97,6 +97,9 @@ make docker-uvm-run            # build + run the full UVM gate in the container
 docker run --rm ip-axi-2apbs-uvm:latest make simple
 
 # Railway (one-shot job; restartPolicy NEVER in railway.toml):
+make railway-run                # END TO END: login/link (first run) + up + tail
+#   raise the service memory limit to ~8 GB first (dashboard) — see RAM floor below
+# Or the granular steps:
 railway login && railway link   # once, to select the project/service
 make railway-deploy             # railway up — builds the Dockerfile in the cloud
 make railway-logs               # tail the run

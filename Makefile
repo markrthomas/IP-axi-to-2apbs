@@ -185,9 +185,10 @@ help:
 	@echo ""
 	@echo ""
 	@echo "  Docker / Railway (license-free UVM on Verilator in a container):"
-	@echo "    make docker-uvm-build             # build image (uvm/vlt/Dockerfile)"
+	@echo "    make railway-run                  # ONE-SHOT: login/link + up + tail the run"
+	@echo "    make docker-uvm-build             # build image (root Dockerfile)"
 	@echo "    make docker-uvm-run               # build + run the full UVM gate in a container"
-	@echo "    make railway-deploy               # railway up (needs: railway login && railway link)"
+	@echo "    make railway-deploy               # railway up only (needs: railway login && railway link)"
 	@echo "    make railway-logs                 # tail the Railway deployment logs"
 	@echo "    UVM_IMAGE=name:tag  DOCKER=podman  RAILWAY=railway"
 	@echo ""
@@ -657,8 +658,24 @@ railway-logs:
 	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
 	$(RAILWAY) logs
 
+# One command, end to end: ensure the CLI is present + authenticated + linked,
+# upload/build the image and run the UVM gate in the cloud, then tail the run's
+# logs.  First run prompts for login/link (interactive); afterwards it is
+# non-interactive.  BUILD_JOBS=1 is baked into the image, so no variables need
+# setting; the ~8 GB RAM floor is a one-time dashboard setting (the service's
+# Settings -> Resource Limits) — see uvm/vlt/README.md.  A green run ends with
+# `PASS:` / 0 UVM_ERROR lines and the container exits 0 (Railway: "Completed").
+railway-run:
+	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
+	@$(RAILWAY) whoami   >/dev/null 2>&1 || $(RAILWAY) login
+	@$(RAILWAY) status   >/dev/null 2>&1 || $(RAILWAY) link
+	@echo "[RAILWAY] Uploading + building $(UVM_DOCKERFILE), then running the UVM gate (build logs at the URL below)..."
+	$(RAILWAY) up --detach
+	@echo "[RAILWAY] Deploy queued. Tailing run logs — Ctrl-C stops the tail; the cloud run keeps going."
+	-$(RAILWAY) logs
+
 .PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator \
-	docker-uvm-build docker-uvm-run railway-deploy railway-logs
+	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \
