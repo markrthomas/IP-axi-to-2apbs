@@ -28,14 +28,20 @@ jobs:
       - name: Build the CI smoke image
         run: docker build -f Dockerfile.ci -t ip-axi-2apbs-ci .
 
-      - name: Toolchain present (verilator + iverilog + cocotb)
+      - name: Toolchain present (iverilog + cocotb; verilator is apt 4.x)
         run: |
           docker run --rm ip-axi-2apbs-ci bash -lc '
             set -e
-            verilator --version
             iverilog -V | head -1
             cocotb-config --version
+            verilator --version   # apt 4.x — see note below
           '
 
-      - name: Smoke check inside the container (lint + fast regression)
-        run: docker run --rm ip-axi-2apbs-ci make check
+      # NOTE: ubuntu:22.04 apt Verilator is 4.x, which predates the Verilator-5
+      # lint codes (e.g. UNUSEDSIGNAL) the RTL uses, so `make check`/coverage/lint
+      # (Verilator flows) do NOT work in this image — use the root Dockerfile
+      # (Verilator 5.050 from source) for those.  The apt-compatible smoke is the
+      # iverilog directed regression + the icarus-backed cocotb suite.
+      - name: Smoke check inside the container (directed + cocotb, iverilog-backed)
+        run: |
+          docker run --rm ip-axi-2apbs-ci bash -lc 'set -e; make test && make cocotb'

@@ -9,8 +9,12 @@
 #   Dockerfile.ci   THIS: dev toolchain + gtkwave/pandoc/texlive/yosys, for
 #                   running the repo's smoke checks in a container (built and
 #                   exercised by .github/workflows/docker-ci-image.yml).
-# NOTE: the apt Verilator here is NOT UVM-capable — use the root Dockerfile for
-# the UVM gate.  Build: docker build -f Dockerfile.ci -t ip-axi-2apbs-ci .
+# NOTE: apt Verilator on ubuntu:22.04 is 4.x — not UVM-capable AND too old for the
+# repo's Verilator-5 lint codes (e.g. UNUSEDSIGNAL), so the Verilator flows
+# (`make check`/lint/coverage) do NOT work here.  This image is for the iverilog
+# directed tests and the icarus-backed cocotb suite; use the root Dockerfile
+# (Verilator 5.050 from source) for the Verilator/UVM flows.
+# Build: docker build -f Dockerfile.ci -t ip-axi-2apbs-ci .
 # -----------------------------------------------------------------------------
 FROM ubuntu:22.04
 
