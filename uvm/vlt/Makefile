@@ -29,13 +29,21 @@ UVM_DPI := $(UVM_HOME)/v2020_3_1/dpi/uvm_dpi.cc
 # memory allows — CI sets BUILD_JOBS=$(nproc).
 BUILD_JOBS ?= 1
 
+# C++ flags for the generated model, forwarded to g++ via verilator --CFLAGS.
+# -O0 keeps the (large) UVM compile's RAM/time modest.  On a RAM-tight host where
+# even a single-job UVM precompiled-header compile OOM-kills cc1plus (e.g. a small
+# cloud instance), append GCC aggressive-GC params to slash peak RSS at the cost
+# of compile time, e.g.:
+#   make ... CFLAGS_MODEL='-O0 --param ggc-min-expand=1 --param ggc-min-heapsize=32768'
+# (also settable via the environment — the Docker image/Railway can export it).
+CFLAGS_MODEL ?= -O0
+
 # --binary: self-contained executable; --timing: UVM needs event/#delay support;
-# --vpi: UVM DPI/HDL backdoor. -Wno-fatal keeps library-side warnings non-fatal;
-# -O0 on the C++ side keeps the (large) UVM compile within a modest RAM budget.
+# --vpi: UVM DPI/HDL backdoor. -Wno-fatal keeps library-side warnings non-fatal.
 # -Wno-COVERIGN silences the (excluded) covergroup notes; width warnings stay
 # non-fatal via -Wno-fatal.
 VFLAGS ?= --binary --timing --vpi -j $(BUILD_JOBS) --build-jobs $(BUILD_JOBS) \
-          -Wno-fatal -Wno-COVERIGN --CFLAGS -O0
+          -Wno-fatal -Wno-COVERIGN --CFLAGS "$(CFLAGS_MODEL)"
 
 # Runtime plusargs common to every test.
 UVM_PLUSARGS ?= +UVM_NO_RELNOTES
