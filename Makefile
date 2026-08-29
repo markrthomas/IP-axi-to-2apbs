@@ -190,6 +190,7 @@ help:
 	@echo "    make docker-uvm-run               # build + run the full UVM gate in a container"
 	@echo "    make railway-deploy               # railway up only (needs: railway login && railway link)"
 	@echo "    make railway-logs                 # tail the Railway deployment logs"
+	@echo "    make check-docker                 # offline plumbing tests (no build/network)"
 	@echo "    UVM_IMAGE=name:tag  DOCKER=podman  RAILWAY=railway"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
@@ -675,8 +676,14 @@ railway-run:
 	@echo "[RAILWAY] Deploy queued; watching for completion — returns to your prompt with PASS/FAIL when the run ends."
 	@RAILWAY='$(RAILWAY)' bash $(RAILWAY_WATCH)
 
+# Offline tests for the Docker/Railway plumbing (no Docker build, no network):
+# script syntax, railway-watch classifier self-test, entrypoint dispatch/preflight
+# with a mocked make, and a railway-run parse check.  Run in CI (docker-plumbing.yml).
+check-docker:
+	bash docker/plumbing-test.sh
+
 .PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator \
-	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run
+	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run check-docker
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \

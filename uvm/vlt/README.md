@@ -141,6 +141,16 @@ Container/cloud specifics baked into the image + entrypoint:
 - **`z3`** is installed for run-time constraint solving; a **UTF-8 locale** is
   forced so non-ASCII report output does not crash on a C/POSIX log sink.
 
+**CI coverage of this plumbing.** `.github/workflows/docker-plumbing.yml` runs on
+every push/PR (seconds, no Docker build): `make check-docker`
+(`docker/plumbing-test.sh`) — shell syntax + shellcheck, the `railway-watch.sh`
+PASS/FAIL classifier self-test, and the entrypoint dispatch/preflight logic
+against a mocked `make`. `.github/workflows/docker-image.yml` (path-gated to
+`Dockerfile`/`docker/**`, or manual) actually builds the image and exercises the
+entrypoint end-to-end (passthrough, preflight-abort exit 3, `make lint`). The UVM
+*simulation* correctness is covered separately by `verilator-sim.yml`, which runs
+the same tops directly on the runner.
+
 ## Verilator-specific divergences in the shared env
 
 The shared UVM sources carry `` `ifndef VERILATOR `` guards where behavior must
