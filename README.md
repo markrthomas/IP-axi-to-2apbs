@@ -65,12 +65,16 @@ flows run from the repo root (each degrades gracefully if its tool is absent):
 | Performance | `make perf` / `make perf-html` | Benchmarks the burst bridge and reports simulation speed and design cycles-per-beat / sustained bandwidth. |
 | UVM on Verilator | `make -C uvm/vlt lint` / `simple` / `ci` | License-free UVM env under open-source Verilator 5.050 (`uvm/vlt/README.md`). |
 | Container / cloud | `make docker-uvm-run` / `make railway-run` | Run the full UVM gate off-box in Docker or on Railway (one-shot deploy that returns PASS/FAIL); `make check-docker` runs the offline plumbing tests. |
+| Metrics dashboard | `make report` / `make report_check` | Aggregate coverage + UVM tops + cocotb + formal + perf into `report/{metrics.json,report.md,report.html}`, and **compare/contrast run environments** (local / container / Railway / CI). `report_check` is an advisory threshold gate. |
 
 Reproduce a specific random wave trace with `PYUVM_SEED=<n> make pyuvm-waves`.
 
-A **unified metrics dashboard** — one HTML report aggregating every flow above and
-comparing runs across environments (local / container / Railway / CI) — is planned
-as near-term item 8 in [`doc/PLAN.md`](doc/PLAN.md).
+The **metrics dashboard** (`make report`) rolls up every flow above into one
+self-contained HTML report and shows the same UVM tops side by side across
+environments (walltime / peak RSS per top). A CI run publishes it as the
+`metrics-report` artifact (`verilator-sim.yml`); a container/Railway run echoes an
+`env-*.json` fragment you can drop into a local `report/` to add that environment
+to the comparison.
 
 ## Xcelium Tutorial
 

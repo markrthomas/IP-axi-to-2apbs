@@ -114,9 +114,44 @@ run_make() {
   exit "${rc}"
 }
 
+# After the default gate, emit this run's per-top metrics as report/env-<env>.json
+# (env auto-detected: railway/container/ci) and echo it to stdout — the container
+# FS is ephemeral, so the echoed fragment is recoverable from the logs and can be
+# dropped into a local report/ to compare/contrast environments (PLAN item 8).
+emit_env_fragment() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  [ -f scripts/gen_report.py ] || return 0
+  python3 scripts/gen_report.py --fragment --out /work/report >/dev/null 2>&1 || return 0
+  local f; f="$(ls /work/report/env-*.json 2>/dev/null | head -1)"
+  [ -n "${f}" ] || return 0
+  echo "=== BEGIN metrics fragment ($(basename "${f}")) — copy into a local report/ to compare envs ==="
+  cat "${f}"
+  echo "=== END metrics fragment ==="
+}
+
+# Run the default gate without exec (so the fragment can be emitted afterwards),
+# reusing the same quiet/log-filter behaviour as run_make.
+run_gate_and_report() {
+  local rc
+  set +e
+  if [ "${_quiet}" != "1" ]; then
+    make "$@"; rc=$?
+  else
+    make "$@" 2>&1 | tee "${_LOG}" | grep --line-buffered -E "${_SIGNAL_RE}"; rc=${PIPESTATUS[0]}
+    if [ "${rc}" -ne 0 ]; then
+      echo "=== UVM gate FAILED (rc=${rc}) — last 200 lines of full transcript ==="
+      tail -n 200 "${_LOG}" 2>/dev/null || true
+    fi
+  fi
+  emit_env_fragment || true
+  set -e
+  return "${rc}"
+}
+
 if [ "$#" -eq 0 ]; then
   preflight_resources                       # default `ci` always builds --binary
-  run_make -C uvm/vlt ci "${MAKE_ARGS[@]}"
+  set +e; run_gate_and_report -C uvm/vlt ci "${MAKE_ARGS[@]}"; rc=$?; set -e
+  exit "${rc}"
 elif [ "$1" = "make" ]; then
   shift
   if goals_need_ram "$@"; then preflight_resources; fi

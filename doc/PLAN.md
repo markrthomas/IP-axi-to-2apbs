@@ -133,7 +133,7 @@ check-docker`). RAM findings and knobs (`BUILD_JOBS`, `VL_BUILD_JOBS`,
 
 ---
 
-### 8 — Unified metrics collection + HTML dashboard (compare & contrast)
+### ~~8 — Unified metrics collection + HTML dashboard (compare & contrast)~~ ✓ DONE 2026-08-29
 
 **What:** There is no single place that aggregates the suite's verification and
 performance metrics, and nothing captures *where/how* a run executed. Build one
@@ -147,7 +147,22 @@ Modeled on `~/proj/ucie_rdi_to_pcie6_pipe7` (`scripts/gen_report.py` +
 `report/{metrics.json,report.md,report.html}`, driven by `make report` /
 `make report_check`, with an advisory `scripts/report_thresholds.json`).
 
-**Work items:**
+**Completed (2026-08-29):** `scripts/gen_report.py` aggregates coverage (three
+`coverage_*.info`, line + branch, DUT-only), the UVM tops' `run.log` (status +
+UVM counts + walltime + peak MB), cocotb JUnit (all `cocotb/*/results.xml`),
+formal, and perf into `report/{metrics.json,report.md,report.html}`, degrading
+gracefully on missing inputs. The **compare/contrast** axis auto-detects the run
+environment (local / container / railway / ci, or `--env`) and merges per-top
+metrics — plus any `report/env-*.json` fragments — into `environments.json`,
+rendered as a per-top × per-environment table (walltime / peak RSS). `make report`
+runs the feasible flows then aggregates; `make report_check` is the advisory
+threshold gate (`scripts/report_thresholds.json`), **not** wired into the required
+`ci`. CI publishes the dashboard: `verilator-sim.yml` runs `gen_report --env ci`
+and uploads the `metrics-report` artifact; the container entrypoint emits and
+echoes an `env-*.json` fragment (the container FS is ephemeral) so a Docker/Railway
+run can contribute its environment to a combined report.
+
+**Original work items (all addressed above):**
 
 - `scripts/gen_report.py` — aggregate, with graceful degradation on missing
   inputs:

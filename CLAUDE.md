@@ -58,10 +58,13 @@ Key facts an agent must know before working here:
   (PLAN item 7). Runs green end-to-end on Railway Hobby (8 GB); plumbing CI-tested
   (`docker-plumbing.yml`, `docker-image.yml`, `make check-docker`). Details +
   RAM knobs in `uvm/vlt/README.md`.
-- **Current near-term focus: PLAN item 8 — unified metrics dashboard.** Aggregate
-  every flow + compare/contrast run environments (local/container/Railway/CI) into
-  `report/{metrics.json,report.md,report.html}` (`make report`/`report_check`),
-  modeled on `~/proj/ucie_rdi_to_pcie6_pipe7`.
+- ✓ **Unified metrics dashboard — DONE 2026-08-29** (PLAN item 8).
+  `scripts/gen_report.py` + `make report`/`report_check` aggregate every flow into
+  `report/{metrics.json,report.md,report.html}` and compare/contrast run
+  environments (local/container/Railway/CI) via `environments.json` + `env-*.json`
+  fragments. CI publishes the `metrics-report` artifact (`verilator-sim.yml`);
+  container entrypoint echoes an env fragment. Modeled on
+  `~/proj/ucie_rdi_to_pcie6_pipe7`.
 - ✓ CI runs all UVM tops (`simple`, `burst`, `burst_ext`, `parameterized`,
   `regblock-*`), all gated on `UVM_ERROR`/`UVM_FATAL`.
 - Scoreboard invariants confirmed equivalent to VCS for all tops; coverage

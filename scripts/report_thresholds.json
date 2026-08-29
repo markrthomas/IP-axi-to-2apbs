@@ -1,0 +1,8 @@
+{
+  "_comment": "Advisory perf/quality thresholds for `make report_check` (PLAN item 8). Opt-in — NOT wired into the required CI gate, so a sim-timing wobble or a partial local run never reds the build. Only metrics present in report/metrics.json are checked.",
+  "min_line_coverage_pct": 90.0,
+  "min_branch_coverage_pct": 70.0,
+  "require_uvm_tops_clean": true,
+  "require_formal_pass": true,
+  "min_cocotb_pass_rate": 100.0
+}

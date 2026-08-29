@@ -177,6 +177,10 @@ help:
 	@echo "    make perf-html                    # perf, then open the HTML in a browser"
 	@echo "    PERF_ITERS=20000 make perf        # larger workload for a steadier timing sample"
 	@echo ""
+	@echo "  Metrics dashboard (aggregate all flows + compare run environments):"
+	@echo "    make report                       # run feasible flows -> report/{metrics.json,report.md,report.html}"
+	@echo "    make report_check                 # advisory perf/quality threshold gate (not in CI gate)"
+	@echo ""
 	@echo "  PyUVM:"
 	@echo "    make pyuvm                        # run the PyUVM burst testbench (directed + random)"
 	@echo "    make pyuvm-waves                  # randomized PyUVM run, dump FST for GTKWave"
@@ -682,15 +686,42 @@ railway-run:
 check-docker:
 	bash docker/plumbing-test.sh
 
+# ---- Unified metrics dashboard (PLAN item 8) --------------------------------
+# Aggregate coverage + UVM tops + cocotb + formal + perf, and compare/contrast
+# run environments (local/container/railway/ci), into report/{metrics.json,
+# report.md,report.html}.  Runs the *feasible* flows first (each tolerant of a
+# missing tool); UVM per-top metrics come from uvm/vlt/obj/<top>/run.log (from a
+# prior local top run, or CI/container env-*.json fragments — the heavy UVM
+# --binary build itself is not run here, it OOMs an ~8 GB host).
+REPORT_DIR ?= report
+GEN_REPORT := scripts/gen_report.py
+report:
+	@mkdir -p $(REPORT_DIR)/logs
+	@echo "[report] 1/4 coverage ..."
+	-$(MAKE) coverage
+	@echo "[report] 2/4 cocotb ..."
+	-$(MAKE) cocotb
+	@echo "[report] 3/4 formal ..."
+	-$(MAKE) formal 2>&1 | tee $(REPORT_DIR)/logs/formal.log
+	@echo "[report] 4/4 perf ..."
+	-$(MAKE) perf
+	@echo "[report] aggregating -> $(REPORT_DIR)/{metrics.json,report.md,report.html}"
+	python3 $(GEN_REPORT) --root $(CURDIR) --out $(CURDIR)/$(REPORT_DIR)
+
+# Advisory perf/quality gate over report/metrics.json (run after `make report`).
+# NOT part of the required `ci` gate — a sim wobble / partial run must not red it.
+report_check:
+	python3 $(GEN_REPORT) --out $(CURDIR)/$(REPORT_DIR) --check scripts/report_thresholds.json
+
 .PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator \
-	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run check-docker
+	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run check-docker report report_check
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \
 		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
 		coverage_simple.info coverage_burst.info coverage_regblock.info $(COV_REPORT_HTML) \
 		$(PERF_REPORT_HTML) $(PERF_METRICS)
-	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB) $(PERF_DIR)
+	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB) $(PERF_DIR) $(REPORT_DIR)
 	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/vcs clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/xcelium clean 2>/dev/null || true

@@ -20,6 +20,7 @@ sim_regblock
 coverage_report.html
 perf_report.html
 perf_metrics.txt
+report/
 # Local-only tooling / notes
 .mcp.json
 NOTES

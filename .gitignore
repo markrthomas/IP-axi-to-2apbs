@@ -10,6 +10,7 @@ coverage_regblock.info
 coverage_report.html
 perf_report.html
 perf_metrics.txt
+report/
 sim_burst_ext
 sim_simple_ws_*
 sim_param
