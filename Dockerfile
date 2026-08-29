@@ -25,6 +25,12 @@ FROM ubuntu:24.04 AS verilator-build
 # Pinned to the v5.050 release tag (matches the workflow + local ~/verilator).
 ARG VERILATOR_REF=v5.050
 ARG VERILATOR_PREFIX=/opt/verilator
+# Parallelism for the Verilator *source* compile (distinct from BUILD_JOBS, which
+# bounds the later UVM --binary build).  Cloud builders (Railway) advertise many
+# cores but cap builder RAM, so `make -j $(nproc)` here OOM-kills g++.  Keep this
+# low; raise it as a build arg where the builder has ample RAM:
+#   docker build --build-arg VL_BUILD_JOBS=8 ...   (Railway: set it as a build var)
+ARG VL_BUILD_JOBS=2
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Same build dependencies as .github/workflows/verilator-sim.yml.
@@ -39,7 +45,8 @@ RUN git clone --depth 1 --branch "${VERILATOR_REF}" \
 WORKDIR /tmp/verilator-src
 RUN autoconf \
     && ./configure --prefix="${VERILATOR_PREFIX}" \
-    && make -j"$(nproc)" \
+    && echo "Building Verilator with -j${VL_BUILD_JOBS} (nproc=$(nproc))" \
+    && make -j"${VL_BUILD_JOBS}" \
     && make install
 
 # `make install` does not install test_regress/; keep the bundled UVM library
