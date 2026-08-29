@@ -28,8 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-recommended \
     texlive-fonts-recommended \
     yosys \
-    symbiyosys \
     && rm -rf /var/lib/apt/lists/*
+
+# NOTE: SymbiYosys (sby) is NOT an apt package — it ships via the OSS CAD Suite or
+# a source build (see .github/workflows/verilator-sim.yml). `make formal` checks
+# for `sby` and degrades gracefully when absent, so it is simply skipped here.
+# Add SymbiYosys from OSS CAD Suite / source if this image needs the formal flow.
 
 # Python tooling used by cocotb / pyuvm
 RUN python3 -m venv /opt/venv \
