@@ -88,11 +88,12 @@ ENV VERILATOR="${VERILATOR_PREFIX}/bin/verilator" \
     UVM_HOME="${VERILATOR_PREFIX}/uvm" \
     PATH="${VERILATOR_PREFIX}/bin:${PATH}"
 
-# Bound the --binary C++ build parallelism.  Cloud builders advertise many cores
-# but little RAM, so the UVM compile at high -j OOM-kills the compiler; 2 keeps
-# peak memory bounded.  Raise it where RAM is ample, or lower to 1 on the
-# smallest instances.  The entrypoint passes this to make as BUILD_JOBS.
-ENV BUILD_JOBS=2
+# Bound the --binary C++ build parallelism.  The UVM precompiled-header compile
+# (all of UVM in one g++ TU) needs several GB *per job*; two at once OOM-kill the
+# compiler on a typical cloud instance (empirically: a Railway Hobby 8 GB box
+# survives ONE PCH compile but not two).  Default to 1 (serialized, RAM-safe);
+# raise it only on a host with ample RAM.  The entrypoint passes it as BUILD_JOBS.
+ENV BUILD_JOBS=1
 
 WORKDIR /work
 COPY . /work

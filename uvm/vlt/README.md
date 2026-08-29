@@ -80,8 +80,9 @@ The `--binary` build OOMs an ~8 GB host (see above). Besides GitHub Actions, the
 repo-root **`Dockerfile`** packages the whole flow — it builds UVM-capable
 Verilator 5.050 from source, bundles the UVM library at `UVM_HOME`, and its
 entrypoint (`docker/entrypoint.sh`) runs `make -C uvm/vlt ci` (lint + every top,
-scoreboard/`UVM_ERROR` gated). Run it on any RAM-generous container host;
-[Railway](https://railway.com) is wired up via the repo-root `railway.toml`.
+scoreboard/`UVM_ERROR` gated). Run it on a RAM-generous container host (**~8 GB**
+— see the RAM floor below); [Railway](https://railway.com) (Hobby plan) is wired
+up via the repo-root `railway.toml`.
 (This mirrors the sibling `axi-on-ucie-to-mem` image, except that flow pins
 oss-cad-suite's Verilator — here we must build 5.050 from source because the
 oss-cad-suite Verilator is not UVM-capable.)
@@ -106,9 +107,21 @@ Container/cloud specifics baked into the image + entrypoint:
 - **`VERILATOR_ROOT` unset** — the launcher derives its root from the bundled
   install; the entrypoint drops any stale value defensively (a stale one
   hard-errors the launcher — see above).
-- **`BUILD_JOBS=2` default** — cloud builders advertise many cores but little
-  RAM, so the `--binary` compile at `-j $(nproc)` OOM-kills `g++`. Override with
-  `-e BUILD_JOBS=N`.
+- **RAM floor: ~8 GB.** The UVM precompiled-header compile (all of UVM in one
+  g++ TU) needs several GB. A **1 GB instance cannot build it at all** (cc1plus
+  is OOM-killed even at `-j1`); a Railway **Hobby** instance (up to 8 GB) clears
+  it, matching the 7 GB GitHub runner. On Railway, raise the service memory limit
+  (Settings → Resource Limits) before deploying.
+- **`BUILD_JOBS=1` default** — each PCH compile needs several GB, so two at once
+  OOM even an 8 GB box; serialize to one. Raise with `-e BUILD_JOBS=N` only where
+  RAM is ample. (Two *separate* pools OOM independently: the Docker *builder*
+  during the Verilator-from-source compile — bounded by the `VL_BUILD_JOBS` build
+  arg, default 2 — and the *runtime* instance during the `--binary` build —
+  bounded by `BUILD_JOBS`.)
+- **`CFLAGS_MODEL` knob** — on a RAM-tight box (e.g. trying 4 GB instead of 8),
+  `-e CFLAGS_MODEL='-O0 --param ggc-min-expand=1 --param ggc-min-heapsize=32768'`
+  forces GCC to garbage-collect aggressively, cutting cc1plus peak RSS ~30–50% at
+  the cost of compile time.
 - **Railway log filter** — the build echoes a ~500-char `g++` line per generated
   file (thousands of files); Railway rate-limits log ingestion, so on Railway
   (auto-detected) the entrypoint forwards only signal lines (UVM report lines,
