@@ -37,6 +37,7 @@ verification/formal/apb4_*/
 # Local notes and tooling
 NOTES
 .codex
+.mcp.json
 uvm/vcs/sim_*
 uvm/vcs/*.log
 uvm/vcs/csrc/

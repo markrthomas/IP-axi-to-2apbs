@@ -1,6 +1,6 @@
 # Development Plan — IP-axi-to-2apbs
 
-**As of:** 2026-05-14
+**As of:** 2026-08-29
 
 ## Current baseline
 
@@ -12,7 +12,7 @@
 | UVM environment | Scoreboard, coverage collector, constrained-random sequences (`bridge_rand_seq`, `bridge_stress_seq`), VCS + Xcelium make targets; open-source Verilator flow (`uvm/vlt/`) **green in CI** — all tops (`simple`, `burst`, `burst_ext`, `parameterized`, regblock tests) build and run scoreboard-clean on Verilator 5.050 |
 | Formal | SymbiYosys BMC (simple depth 30, burst depth 50) + cover; safety + liveness; all 4 proofs pass; CI gated |
 | Coverage | Verilator C++ harnesses; 100% line; HTML report via `make cov-report`; exclusions documented in `doc/coverage_notes.md` |
-| CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact |
+| CI (GitHub Actions) | `regress` → `uvm-mirror` + `coverage` + `cocotb` + `formal` in parallel; coverage `.info` uploaded as artifact. Separate `UVM on Verilator` workflow (`verilator-sim.yml`) builds Verilator 5.050 from source and runs all UVM tops, gated on `UVM_ERROR`/`UVM_FATAL` |
 | Documentation | `design_contract.md`, `stress_test.md`, `coverage_notes.md`, UVM READMEs, PDF targets |
 
 ---
