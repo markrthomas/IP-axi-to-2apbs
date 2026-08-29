@@ -115,6 +115,12 @@ Container/cloud specifics baked into the image + entrypoint:
   is OOM-killed even at `-j1`); a Railway **Hobby** instance (up to 8 GB) clears
   it, matching the 7 GB GitHub runner. On Railway, raise the service memory limit
   (Settings → Resource Limits) before deploying.
+- **Fail-fast preflight.** Before any `--binary` build, the entrypoint reads the
+  container's cgroup memory limit and aborts in seconds (exit 3) if it is below
+  the floor — so a too-small instance fails immediately with actionable guidance
+  instead of OOM-killing cc1plus after ~10 minutes. Floor is 6144 MB; override
+  with `-e UVM_MIN_MEM_MB=N`, or skip the check with `-e UVM_SKIP_RESCHECK=1`.
+  Cheap `lint`/`clean` targets (~330 MB) are not gated.
 - **`BUILD_JOBS=1` default** — each PCH compile needs several GB, so two at once
   OOM even an 8 GB box; serialize to one. Raise with `-e BUILD_JOBS=N` only where
   RAM is ample. (Two *separate* pools OOM independently: the Docker *builder*

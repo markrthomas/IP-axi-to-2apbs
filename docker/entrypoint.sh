@@ -19,8 +19,62 @@ unset VERILATOR_ROOT || true
 MAKE_ARGS=(
   "VERILATOR=${VERILATOR:-/opt/verilator/bin/verilator}"
   "UVM_HOME=${UVM_HOME:-/opt/verilator/uvm}"
-  "BUILD_JOBS=${BUILD_JOBS:-2}"
+  "BUILD_JOBS=${BUILD_JOBS:-1}"
 )
+
+# --- resource preflight: fail fast before the RAM-heavy --binary build --------
+# The UVM precompiled-header compile (all of UVM in one g++ TU) needs several GB;
+# a too-small instance only OOM-kills cc1plus after minutes of building.  Read the
+# container's cgroup memory limit up front and abort in seconds with actionable
+# guidance instead of burning a full build.  Empirically: 1 GB can't build it at
+# all, ~5.7 GB OOMs, a 7 GB CI runner / 8 GB Railway Hobby clears it — so the
+# floor is 6144 MB.  Override the floor with UVM_MIN_MEM_MB; bypass entirely with
+# UVM_SKIP_RESCHECK=1.  Only the heavy (--binary) targets are gated — lint/clean,
+# which need ~330 MB, are not.
+container_mem_mb() {
+  local lim=""
+  if [ -r /sys/fs/cgroup/memory.max ]; then                 # cgroup v2
+    lim="$(cat /sys/fs/cgroup/memory.max 2>/dev/null)"
+  elif [ -r /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then  # cgroup v1
+    lim="$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null)"
+  fi
+  # "max" (v2) or an enormous sentinel (v1 unlimited) -> no cap; use host MemTotal.
+  if [ -z "${lim}" ] || [ "${lim}" = "max" ] || { [ "${lim}" -gt 1000000000000 ] 2>/dev/null; }; then
+    awk '/MemTotal/{printf "%d", $2/1024}' /proc/meminfo 2>/dev/null
+  else
+    echo "$(( lim / 1024 / 1024 ))"
+  fi
+}
+
+preflight_resources() {
+  [ -n "${UVM_SKIP_RESCHECK:-}" ] && return 0
+  local min_mb="${UVM_MIN_MEM_MB:-6144}"
+  local mem_mb cpus
+  mem_mb="$(container_mem_mb)"
+  cpus="$(nproc 2>/dev/null || echo '?')"
+  echo "[preflight] container memory: ${mem_mb:-?} MB (floor ${min_mb} MB) | vCPUs: ${cpus} | BUILD_JOBS=${BUILD_JOBS:-1}"
+  if [ -n "${mem_mb}" ] && [ "${mem_mb}" -lt "${min_mb}" ] 2>/dev/null; then
+    echo "[preflight] ERROR: ${mem_mb} MB is below the ${min_mb} MB floor for the UVM --binary build;" >&2
+    echo "[preflight]   the UVM precompiled-header compile OOM-kills cc1plus below this." >&2
+    echo "[preflight]   Fix: raise instance memory (Railway: service Settings -> Resource Limits, ~8 GB)." >&2
+    echo "[preflight]   ~4 GB box? export CFLAGS_MODEL='-O0 --param ggc-min-expand=1 --param ggc-min-heapsize=32768'," >&2
+    echo "[preflight]   lower the floor via UVM_MIN_MEM_MB, or bypass the check with UVM_SKIP_RESCHECK=1." >&2
+    exit 3
+  fi
+}
+
+# Heavy iff any make goal is not a cheap (lint/clean) target.  Args are the make
+# goals only (no -C/dir, no VAR=val overrides).
+goals_need_ram() {
+  local g
+  for g in "$@"; do
+    case "${g}" in
+      lint|lint-*|clean) ;;   # elaborate-only / rm: ~330 MB, no --binary build
+      *) return 0 ;;          # anything else builds C++ -> needs the RAM floor
+    esac
+  done
+  return 1
+}
 
 # --- log-volume control for rate-limited cloud log sinks ---------------------
 # `make -C uvm/vlt ci` is very chatty: the --binary build echoes a ~500-char g++
@@ -61,9 +115,11 @@ run_make() {
 }
 
 if [ "$#" -eq 0 ]; then
+  preflight_resources                       # default `ci` always builds --binary
   run_make -C uvm/vlt ci "${MAKE_ARGS[@]}"
 elif [ "$1" = "make" ]; then
   shift
+  if goals_need_ram "$@"; then preflight_resources; fi
   run_make -C uvm/vlt "$@" "${MAKE_ARGS[@]}"
 else
   exec "$@"
