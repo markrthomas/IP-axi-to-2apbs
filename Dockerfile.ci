@@ -1,3 +1,17 @@
+# -----------------------------------------------------------------------------
+# CI SMOKE image — full open-source toolchain for the non-UVM flows.
+#
+# One of three images in this repo, each with a distinct role:
+#   Dockerfile      UVM-on-Verilator gate (Verilator 5.050 from source) — Railway
+#                   / docker-image.yml.  The only one that can run `uvm/vlt`.
+#   Dockerfile.dev  lean devcontainer (apt verilator/iverilog + cocotb/pyuvm) —
+#                   used by .devcontainer/devcontainer.json.
+#   Dockerfile.ci   THIS: dev toolchain + gtkwave/pandoc/texlive/yosys, for
+#                   running the repo's smoke checks in a container (built and
+#                   exercised by .github/workflows/docker-ci-image.yml).
+# NOTE: the apt Verilator here is NOT UVM-capable — use the root Dockerfile for
+# the UVM gate.  Build: docker build -f Dockerfile.ci -t ip-axi-2apbs-ci .
+# -----------------------------------------------------------------------------
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \

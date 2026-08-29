@@ -1,0 +1,41 @@
+name: Docker CI smoke image
+
+# Build Dockerfile.ci (the full open-source toolchain image) and run the repo's
+# smoke checks inside it, so the image is actually exercised — an unbuilt image
+# silently rots (e.g. the non-existent `symbiyosys` apt package that once broke
+# it). Path-gated to the image definition (or manual dispatch); the RTL/test
+# correctness on every push is already covered by ci.yml on the bare runner.
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'Dockerfile.ci'
+      - '.github/workflows/docker-ci-image.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile.ci'
+      - '.github/workflows/docker-ci-image.yml'
+  workflow_dispatch:
+
+jobs:
+  ci-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Build the CI smoke image
+        run: docker build -f Dockerfile.ci -t ip-axi-2apbs-ci .
+
+      - name: Toolchain present (verilator + iverilog + cocotb)
+        run: |
+          docker run --rm ip-axi-2apbs-ci bash -lc '
+            set -e
+            verilator --version
+            iverilog -V | head -1
+            cocotb-config --version
+          '
+
+      - name: Smoke check inside the container (lint + fast regression)
+        run: docker run --rm ip-axi-2apbs-ci make check
