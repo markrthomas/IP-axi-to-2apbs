@@ -61,7 +61,7 @@ flows run from the repo root (each degrades gracefully if its tool is absent):
 | PyUVM testbench | `make pyuvm` | Full pyUVM hierarchy (sequencer / driver / scoreboard) over the burst bridge. |
 | PyUVM waves | `make pyuvm-waves` / `make pyuvm-wave-view` | Randomized, seed-controlled run that dumps an FST and opens it in GTKWave with a grouped [save file](cocotb/pyuvm_waves/pyuvm_burst.gtkw). |
 | Formal | `make formal` | SymbiYosys BMC + cover (safety + liveness) proofs. |
-| Coverage | `make cov-report` / `make cov-html` | Verilator line/branch coverage → terminal table + self-contained HTML report. |
+| Coverage | `make cov-report` / `make cov-html` | Verilator line + toggle coverage → terminal table + self-contained HTML report (line is the enforced signal; toggle is informational — see `doc/coverage_notes.md`). |
 | Performance | `make perf` / `make perf-html` | Benchmarks the burst bridge and reports simulation speed and design cycles-per-beat / sustained bandwidth. |
 | UVM on Verilator | `make -C uvm/vlt lint` / `simple` / `ci` | License-free UVM env under open-source Verilator 5.050 (`uvm/vlt/README.md`). |
 | Container / cloud | `make docker-uvm-run` / `make railway-run` | Run the full UVM gate off-box in Docker or on Railway (one-shot deploy that returns PASS/FAIL); `make check-docker` runs the offline plumbing tests. |

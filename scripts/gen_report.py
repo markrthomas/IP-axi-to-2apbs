@@ -3,7 +3,8 @@
 and run-environment metrics into one report (PLAN item 8).
 
 Consumes (all optional; missing inputs degrade gracefully):
-  - coverage_{simple,burst,regblock}.info : Verilator LCOV → line + branch coverage
+  - coverage_{simple,burst,regblock}.info : Verilator LCOV → line + toggle coverage
+    (the LCOV BRDA records are Verilator toggle points, not control-flow branches)
   - uvm/vlt/obj/<top>/run.log             : UVM report counts + Verilator $finish
                                             (walltime / speed / peak MB) per top
   - cocotb/<group>/results.xml            : cocotb JUnit → per-test pass/fail + sim ns
@@ -65,8 +66,12 @@ def detect_env():
 
 # ---------------------------------------------------------------- coverage (LCOV)
 def parse_coverage(root: Path):
-    """Union of the DUT (src/) files across all coverage_*.info; line + branch."""
-    files = {}   # basename -> [lhit, lines, bhit, branches]
+    """Union of the DUT (src/) files across all coverage_*.info; line + toggle.
+
+    BRDA records under a Verilator `--coverage` run are toggle points, not
+    control-flow branches (Verilator emits no branch coverage), so the second
+    metric is toggle coverage.  See doc/coverage_notes.md."""
+    files = {}   # basename -> [lhit, lines, thit, toggles]
     any_info = False
     for name in COV_INFO:
         info = root / name
@@ -88,7 +93,11 @@ def parse_coverage(root: Path):
                 except ValueError:
                     pass
             elif line.startswith("BRDA:") and cur is not None:
-                # BRDA:<line>,<block>,<branch>,<taken|->
+                # BRDA:<line>,<block>,<point>,<taken|->
+                # Verilator emits no control-flow branch coverage; under a
+                # `--coverage` run these BRDA records are *toggle* points (one
+                # per signal bit per 0->1 / 1->0 edge).  We report them as
+                # toggle coverage, not branch.  See doc/coverage_notes.md.
                 parts = line[5:].split(",")
                 if len(parts) >= 4:
                     rec = files.setdefault(cur, [0, 0, 0, 0])
@@ -103,12 +112,12 @@ def parse_coverage(root: Path):
     tlh = tl = tbh = tb = 0
     for f, (lh, ln, bh, br) in sorted(files.items()):
         rows.append({"file": f, "lhit": lh, "lines": ln, "line_pct": _pct(lh, ln),
-                     "bhit": bh, "branches": br, "branch_pct": _pct(bh, br)})
+                     "thit": bh, "toggles": br, "toggle_pct": _pct(bh, br)})
         tlh += lh; tl += ln; tbh += bh; tb += br
     rows.sort(key=lambda r: r["line_pct"])   # worst-covered first
     return {"files": rows,
             "line_hit": tlh, "lines": tl, "line_pct": _pct(tlh, tl),
-            "branch_hit": tbh, "branches": tb, "branch_pct": _pct(tbh, tb)}
+            "toggle_hit": tbh, "toggles": tb, "toggle_pct": _pct(tbh, tb)}
 
 
 # ---------------------------------------------------------------- UVM tops
@@ -253,9 +262,14 @@ def build_md(m):
     if cov:
         L += ["## Coverage (Verilator, DUT `src/`)", "",
               f"**Line {cov['line_hit']}/{cov['lines']} = {cov['line_pct']}%**, "
-              f"**Branch {cov['branch_hit']}/{cov['branches']} = {cov['branch_pct']}%**", "",
-              "| File | Line % | Branch % |", "|------|-------:|---------:|"]
-        L += [f"| {r['file']} | {r['line_pct']}% | {r['branch_pct']}% |" for r in cov["files"]] + [""]
+              f"**Toggle {cov['toggle_hit']}/{cov['toggles']} = {cov['toggle_pct']}%**", "",
+              "_Line coverage is the enforced signal.  The second metric is "
+              "**toggle** coverage, not branch (Verilator emits no branch coverage; "
+              "the lcov BRDA points are signal-bit transitions), counted directly "
+              "from BRDA and gated advisorily at 55%. See `doc/coverage_notes.md`._",
+              "",
+              "| File | Line % | Toggle % |", "|------|-------:|---------:|"]
+        L += [f"| {r['file']} | {r['line_pct']}% | {r['toggle_pct']}% |" for r in cov["files"]] + [""]
     if m.get("uvm_tops"):
         L += _md_uvm(m["uvm_tops"])
     envs = m.get("environments") or {}
@@ -319,7 +333,7 @@ def build_html(m):
         cards.append(_card("UVM tops passing", f"{tops_pass}/{len(tops)}"))
     if cov:
         cards.append(_card("Line coverage", cov["line_pct"], "%"))
-        cards.append(_card("Branch coverage", cov["branch_pct"], "%"))
+        cards.append(_card("Toggle coverage", cov["toggle_pct"], "%"))
     if formal:
         fp = sum(1 for v in formal.values() if v == "PASS")
         cards.append(_card("Formal proofs", f"{fp}/{len(formal)}"))
@@ -339,10 +353,14 @@ def build_html(m):
         trs = "".join(
             f'<tr><td>{html.escape(r["file"])}</td>'
             f'<td class="r">{r["lhit"]}/{r["lines"]}</td><td>{_bar(r["line_pct"])}</td>'
-            f'<td>{_bar(r["branch_pct"])}</td></tr>' for r in cov["files"])
-        P.append(f'<h2>Coverage <small>line {cov["line_pct"]}% · branch {cov["branch_pct"]}% '
+            f'<td>{_bar(r["toggle_pct"])}</td></tr>' for r in cov["files"])
+        P.append(f'<h2>Coverage <small>line {cov["line_pct"]}% · toggle {cov["toggle_pct"]}% '
                  f'(Verilator, DUT src/)</small></h2>'
-                 f'<table><tr><th>File</th><th>Lines</th><th>Line</th><th>Branch</th></tr>{trs}</table>')
+                 f'<p class="meta">Line coverage is the enforced signal. The second '
+                 f'metric is <b>toggle</b> coverage, not branch (Verilator emits no branch '
+                 f'coverage; the lcov BRDA points are signal-bit transitions) &mdash; see '
+                 f'doc/coverage_notes.md.</p>'
+                 f'<table><tr><th>File</th><th>Lines</th><th>Line</th><th>Toggle</th></tr>{trs}</table>')
 
     if tops:
         trs = "".join(
@@ -439,9 +457,11 @@ def check_thresholds(out: Path, thresh_file: Path):
     if "min_line_coverage_pct" in t:
         v = cov.get("line_pct", 0.0)
         checks.append(("line_coverage", v >= t["min_line_coverage_pct"], f"{v} >= {t['min_line_coverage_pct']}"))
-    if "min_branch_coverage_pct" in t:
-        v = cov.get("branch_pct", 0.0)
-        checks.append(("branch_coverage", v >= t["min_branch_coverage_pct"], f"{v} >= {t['min_branch_coverage_pct']}"))
+    # Toggle coverage is informational (see doc/coverage_notes.md); only gate on
+    # it if a floor is explicitly configured.
+    if "min_toggle_coverage_pct" in t:
+        v = cov.get("toggle_pct", 0.0)
+        checks.append(("toggle_coverage", v >= t["min_toggle_coverage_pct"], f"{v} >= {t['min_toggle_coverage_pct']}"))
     if t.get("require_uvm_tops_clean"):
         bad = [k for k, r in tops.items() if r["status"] != "PASS"]
         checks.append(("uvm_tops_clean", not bad, "all PASS" if not bad else f"failing: {bad}"))

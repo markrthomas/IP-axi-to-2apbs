@@ -149,7 +149,7 @@ Modeled on `~/proj/ucie_rdi_to_pcie6_pipe7` (`scripts/gen_report.py` +
 `make report_check`, with an advisory `scripts/report_thresholds.json`).
 
 **Completed (2026-08-29):** `scripts/gen_report.py` aggregates coverage (three
-`coverage_*.info`, line + branch, DUT-only), the UVM tops' `run.log` (status +
+`coverage_*.info`, line + toggle, DUT-only), the UVM tops' `run.log` (status +
 UVM counts + walltime + peak MB), cocotb JUnit (all `cocotb/*/results.xml`),
 formal, and perf into `report/{metrics.json,report.md,report.html}`, degrading
 gracefully on missing inputs. The **compare/contrast** axis auto-detects the run
@@ -167,7 +167,7 @@ run can contribute its environment to a combined report.
 
 - `scripts/gen_report.py` — aggregate, with graceful degradation on missing
   inputs:
-  - **Coverage:** `coverage.info` (LCOV) → total + per-DUT-file line/branch %.
+  - **Coverage:** `coverage.info` (LCOV) → total + per-DUT-file line/toggle %.
   - **UVM tops:** each `uvm/vlt/obj/<top>/run.log` → `UVM_INFO/WARNING/ERROR/
     FATAL` counts, and the Verilator `$finish` line → sim walltime / speed.
   - **Formal:** SymbiYosys log → per-proof PASS/FAIL + depth.
