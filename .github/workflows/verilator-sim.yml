@@ -27,7 +27,7 @@ jobs:
 
     steps:
     - name: Check out repository code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     # Cache the whole Verilator install (bin + share + bundled UVM lib) keyed on
     # the pinned ref, so the ~10-minute source build runs only on cache miss.

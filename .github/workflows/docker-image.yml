@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ubuntu-latest has ~4 vCPU / ~16 GB — VL_BUILD_JOBS=4 speeds the Verilator
       # source compile without OOM (that guard matters on RAM-tight cloud builders).
