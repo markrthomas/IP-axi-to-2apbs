@@ -104,7 +104,9 @@ class bridge_rand_seq extends uvm_object;
         `uvm_info("RAND_SEQ", $sformatf("Phase 1: %0d writes", half), UVM_MEDIUM)
         for (int unsigned i = 0; i < half; i++) begin
             items[i] = bridge_rand_item::type_id::create($sformatf("wr_%0d", i));
-            if (!items[i].randomize() with { is_write == 1'b1; })
+            // == 0 (not !): randomize() returns a 32-bit int, and LOGNOT on it
+            // trips the WIDTHTRUNC lint; the explicit compare is width-clean.
+            if (items[i].randomize() with { is_write == 1'b1; } == 0)
                 `uvm_fatal("RAND_SEQ", "randomize() failed on write item")
             `uvm_info("RAND_SEQ",
                 $sformatf("  [W%0d] %s", i, items[i].convert2string()), UVM_MEDIUM)
@@ -123,7 +125,7 @@ class bridge_rand_seq extends uvm_object;
         // Phase 3: any remaining items (when n_txn is odd) as random writes.
         for (int unsigned i = half; i < n_txn; i++) begin
             items[i] = bridge_rand_item::type_id::create($sformatf("extra_%0d", i));
-            if (!items[i].randomize() with { is_write == 1'b1; })
+            if (items[i].randomize() with { is_write == 1'b1; } == 0)  // == 0: see phase 1
                 `uvm_fatal("RAND_SEQ", "randomize() failed on extra item")
             drive_write(items[i], resp);
         end
@@ -197,11 +199,12 @@ class bridge_stress_seq extends uvm_object;
     // Record all pages written by item (INCR touches consecutive pages,
     // FIXED touches only one page repeated).
     function void mark_written(bridge_rand_item item);
-        // Bare assignments (not `int unsigned'(...)` casts): the source fields are
-        // small unsigned bit-vectors, so implicit zero-extension is identical and
-        // parses under Verilator, which rejects the two-word cast form.
-        int unsigned port  = item.apb_port;
-        int unsigned page0 = item.addr_page;
+        // 32'(...) size-cast zero-extends the small unsigned source fields to the
+        // 32-bit int target (width-clean under Verilator: no WIDTHEXPAND).  Note
+        // the two-word type-cast form `int unsigned'(...)` is what Verilator
+        // rejects here — the size-cast is accepted.
+        int unsigned port  = 32'(item.apb_port);
+        int unsigned page0 = 32'(item.addr_page);
         if (item.burst_type == 2'b01) begin   // INCR
             for (int unsigned b = 0; b <= item.burst_len; b++)
                 sh_written[mk_key(port, page0 + b)] = 1;
@@ -212,8 +215,8 @@ class bridge_stress_seq extends uvm_object;
 
     // Return 1 if every beat of a read burst has a written backing entry.
     function bit all_written(bridge_rand_item item);
-        int unsigned port  = item.apb_port;   // see mark_written: bare, not a cast
-        int unsigned page0 = item.addr_page;
+        int unsigned port  = 32'(item.apb_port);   // see mark_written: 32'() size-cast
+        int unsigned page0 = 32'(item.addr_page);
         if (item.burst_type == 2'b01) begin
             for (int unsigned b = 0; b <= item.burst_len; b++)
                 if (!sh_written.exists(mk_key(port, page0 + b))) return 0;
@@ -256,7 +259,7 @@ class bridge_stress_seq extends uvm_object;
                 item = bridge_rand_item::type_id::create(
                     $sformatf("stress_%0d", done));
 
-                if (!item.randomize())
+                if (item.randomize() == 0)  // == 0: see phase 1 (WIDTHTRUNC-clean)
                     `uvm_fatal("STRESS_SEQ", "randomize() failed")
 
                 // For reads, skip if no backing write exists (retry).

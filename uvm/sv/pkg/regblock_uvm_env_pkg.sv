@@ -343,7 +343,7 @@ package regblock_uvm_env_pkg;
 
     function uvm_sequence_item reg2bus(const ref uvm_reg_bus_op rw);
       axi3lite_seq_item item = axi3lite_seq_item::type_id::create("reg2bus");
-      item.addr = rw.addr;
+      item.addr = rw.addr[31:0];   // uvm_reg_addr_t is 64-bit; regblock is 32-bit (explicit, WIDTHTRUNC-clean)
       item.strb = 4'hF;
       item.awid = 4'd0;
       item.wid  = 4'd0;
