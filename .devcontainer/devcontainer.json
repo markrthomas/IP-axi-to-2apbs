@@ -17,6 +17,6 @@
       ]
     }
   },
-  "postCreateCommand": "make help",
+  "postCreateCommand": "make regress && make check-uvm-mirror",
   "shutdownAction": "stopContainer"
 }
