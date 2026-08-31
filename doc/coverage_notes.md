@@ -15,17 +15,66 @@ COV_REPORT_HTML=my.html make cov-report
 
 ## Reported numbers
 
-| Bridge | Line coverage | Branch coverage |
-|--------|--------------|-----------------|
-| `axi4_to_apb4_2x_simple` | **100%** (132/132) | ~3% |
-| `axi4_to_apb4_2x_burst`  | **100%** (215/215) | ~7% |
+**Line coverage is the enforced signal.**  The second Verilator metric is
+**toggle coverage**, not branch coverage — see §Toggle coverage for why it is
+informational (and inherently low).
 
-Branch coverage is structurally low for a reason explained in §Branch artefact
-below; the number is not a meaningful signal for this codebase.
+| Bridge | Line coverage | Toggle coverage |
+|--------|--------------|-----------------|
+| `axi4_to_apb4_2x_simple`   | **100%** (132/132) | ~59% (939/1601) |
+| `axi4_to_apb4_2x_burst`    | **100%** (220/220) | ~62% (1242/2012) |
+| `axi3lite_regblock`        | **100%** (101/101) | ~62% (262/424) |
+
+Pooled toggle: **60.5%** (2443/4037).  (Measured 2026-08-31 with oss-cad-suite
+Verilator 5.0x via `make coverage`.)  Toggle points are counted directly from
+the lcov `BRDA` records; do **not** trust the `BRH` summary line
+`verilator_coverage` writes — it is inconsistent with its own BRDA data (reports
+~55 hit for `simple` where 939 BRDA points actually have `taken>0`) and would
+under-report toggle ~10×.
 
 ---
 
 ## Exclusions
+
+### `axi4_to_apb4_2x_simple.v` — `localparam EXPECTED_AXSIZE` dead-arm exclusion
+
+**Location:** `src/axi4_to_apb4_2x_simple.v`, module body (after port list).
+
+```verilog
+// verilator coverage_off
+localparam EXPECTED_AXSIZE = (DATA_WIDTH == 1024) ? 3'b111 :
+                             ...
+                             3'b000;
+// verilator coverage_on
+```
+
+**Why excluded:** the `?:` chain has one live arm per `DATA_WIDTH`; the
+others are compile-time-dead.  The pragma keeps those folded arms out of
+the coverage denominator so they can't show as misses.  This is a small,
+tidy exclusion — a handful of points, **not** the bulk of the metric.
+
+> Correction (2026-08-31): earlier notes claimed this localparam generated
+> ~1 600 / ~2 000 "synthetic branch points" dominating the denominator.
+> That was wrong.  Verilator emits no control-flow branch coverage at all;
+> the large `BRDA` denominator is **toggle** coverage of the 64-bit datapath
+> (`WDATA`/`RDATA`/`PWDATA`/`PRDATA`/`wdata_reg` are 128 toggle points each),
+> and this pragma does not materially change it.  See §Toggle coverage.
+
+**Pragma used:** `// verilator coverage_off` / `// verilator coverage_on`
+line-form directives (the `coverage_block_off` inline form only works
+inside `begin`/`end` blocks; a `localparam` is module-level).  The
+directives bracket only the `localparam` lines — no runtime-active logic
+is within the exclusion window.
+
+---
+
+### `axi4_to_apb4_2x_burst.v` — `localparam EXPECTED_AXSIZE` dead-arm exclusion
+
+**Location:** `src/axi4_to_apb4_2x_burst.v`, module body (after port list).
+
+Same rationale and same 2026-08-31 correction as the simple bridge above.
+
+---
 
 ### `axi4_to_apb4_2x_simple.v` — FSM `default` arm
 
@@ -71,30 +120,40 @@ mutual exclusion for all reachable states.
 
 ---
 
-## Branch coverage artefact
+## Toggle coverage
 
-Verilator instruments every sub-expression of a conditional as a separate
-branch point.  Both bridges contain:
+The second column in the coverage reports is **toggle coverage**, not branch
+coverage.  Two facts make this so:
 
-```verilog
-localparam EXPECTED_AXSIZE =
-    (DATA_WIDTH == 1024) ? 3'b111 :
-    (DATA_WIDTH == 512)  ? 3'b110 :
-    ...
-    3'b011;  // DATA_WIDTH = 64 (the only instantiated width)
-```
+1. `make coverage` runs Verilator with `--coverage`, which is
+   `--coverage-line --coverage-toggle --coverage-user`.  **Verilator emits no
+   control-flow branch coverage** — there is no branch metric to report.
+2. `verilator_coverage --write-info` has no lcov record type for toggle points,
+   so it writes each one as a `BRDA` (branch-data) record.  Our report scripts
+   read `BRDA` and — correctly — label it toggle coverage.
 
-For `DATA_WIDTH=64` all arms except the last are compile-time-false.
-Verilator still counts each `?:` operand as a separate branch — roughly
-1 600 branch points for `simple` and 2 000 for `burst` — all permanently
-zero because Verilator folds the dead arms.  These synthetic points make
-up ~97% of the branch denominator and cannot be covered by any stimulus.
+A toggle point is one signal bit changing in one direction, so a 64-bit bus is
+`64 × 2 = 128` points.  The three DUTs have wide datapaths (`WDATA`, `RDATA`,
+`PWDATA0/1`, `PRDATA0/1`, `wdata_reg`, …), which is why the denominators are in
+the thousands.  Measured toggle coverage is **~60% pooled** (58.7% simple, 61.7%
+burst, 61.8% regblock): control signals, handshakes, FSM state bits and the low
+address/data bits toggle freely, while the high bits of the wide busses do not
+flip both ways under the current stimulus — expected for a pass-through datapath
+and not a defect.
 
-**Decision:** no exclusion pragma applied to the `localparam` block.
-Adding `coverage_block_off` there would also suppress coverage of the
-runtime-active boolean expressions that happen to be nearby.  The branch
-metric is therefore treated as not meaningful for this codebase and is
-displayed for informational purposes only.
+Toggle **is** gated advisorily: `scripts/report_thresholds.json` sets
+`min_toggle_coverage_pct` to `55.0`, a floor with margin below the 60.5%
+baseline, so a large regression is caught while normal run-to-run jitter is not.
+Line coverage (100%) remains the primary enforced signal.
+
+Counting note: toggle % is computed **directly from the `BRDA` records** (one per
+signal-bit edge) in both `scripts/cov_report.py` and `scripts/gen_report.py`.
+The `BRF`/`BRH` summary lines `verilator_coverage` emits are ignored because its
+`BRH` is inconsistent with the BRDA data it writes.
+
+To push toggle higher, target the *upper* data/address bits with a few extra
+patterns (all-ones, walking-ones); chasing every datapath bit with random data
+is low value for a bridge that does not transform data.
 
 ---
 

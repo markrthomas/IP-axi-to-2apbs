@@ -1,0 +1,27 @@
+name: Docker/Railway plumbing
+
+# Fast, no-Docker-build checks for the containerized UVM-on-Verilator gate:
+# shell syntax + shellcheck, the railway-watch PASS/FAIL classifier self-test, the
+# entrypoint dispatch/resource-preflight logic (with a mocked make), and a
+# `make -n railway-run` sanity check.  Runs on every push/PR — seconds, not
+# minutes.  The heavy actual-image build lives in docker-image.yml.
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  plumbing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Plumbing checks (scripts + entrypoint dispatch + watcher self-test)
+        run: make check-docker

@@ -177,11 +177,25 @@ help:
 	@echo "    make perf-html                    # perf, then open the HTML in a browser"
 	@echo "    PERF_ITERS=20000 make perf        # larger workload for a steadier timing sample"
 	@echo ""
+	@echo "  Metrics dashboard (aggregate all flows + compare run environments):"
+	@echo "    make report                       # run feasible flows -> report/{metrics.json,report.md,report.html}"
+	@echo "    make report_check                 # advisory perf/quality threshold gate (not in CI gate)"
+	@echo ""
 	@echo "  PyUVM:"
 	@echo "    make pyuvm                        # run the PyUVM burst testbench (directed + random)"
 	@echo "    make pyuvm-waves                  # randomized PyUVM run, dump FST for GTKWave"
 	@echo "    make pyuvm-wave-view              # pyuvm-waves, then open the trace in GTKWave"
 	@echo "    PYUVM_SEED=<n> make pyuvm-waves   # reproduce a specific random trace"
+	@echo ""
+	@echo ""
+	@echo "  Docker / Railway (license-free UVM on Verilator in a container):"
+	@echo "    make railway-run                  # ONE-SHOT: login/link + up + wait for PASS/FAIL"
+	@echo "    make docker-uvm-build             # build image (root Dockerfile)"
+	@echo "    make docker-uvm-run               # build + run the full UVM gate in a container"
+	@echo "    make railway-deploy               # railway up only (needs: railway login && railway link)"
+	@echo "    make railway-logs                 # tail the Railway deployment logs"
+	@echo "    make check-docker                 # offline plumbing tests (no build/network)"
+	@echo "    UVM_IMAGE=name:tag  DOCKER=podman  RAILWAY=railway"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
 
@@ -621,14 +635,93 @@ pyuvm-wave-view: pyuvm-waves
 ci: regress coverage check-uvm-mirror cocotb
 	@echo "[CI] All gates passed."
 
-.PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator
+# --- Docker / Railway: license-free UVM on Verilator in a container ----------
+# Builds an image with UVM-capable Verilator 5.050 + the bundled UVM library
+# (root Dockerfile) whose entrypoint runs the full UVM gate (make -C uvm/vlt ci).
+# Useful where the local host lacks the RAM for the --binary build: run it on
+# Railway (or any container host) instead. See uvm/vlt/README.md.
+DOCKER         ?= docker
+RAILWAY        ?= railway
+UVM_IMAGE      ?= ip-axi-2apbs-uvm:latest
+UVM_DOCKERFILE := Dockerfile
+RAILWAY_WATCH  := docker/railway-watch.sh
+
+docker-uvm-build:
+	@command -v $(DOCKER) >/dev/null 2>&1 || { echo "[DOCKER] '$(DOCKER)' not found; install Docker or Podman (or set DOCKER=)"; exit 127; }
+	$(DOCKER) build -f $(UVM_DOCKERFILE) -t $(UVM_IMAGE) .
+
+# NOTE: the --binary build is RAM-heavy; on a small (~8 GB) host this can OOM.
+# The point of this path is to run it on a RAM-generous host (Railway).
+docker-uvm-run: docker-uvm-build
+	$(DOCKER) run --rm $(UVM_IMAGE)
+
+railway-deploy:
+	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
+	@echo "[RAILWAY] Deploying via $(UVM_DOCKERFILE) (.railway/railway.ts). Requires: railway login && railway link."
+	$(RAILWAY) up
+
+railway-logs:
+	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
+	$(RAILWAY) logs
+
+# One command, end to end: ensure the CLI is present + authenticated + linked,
+# upload/build the image and run the UVM gate in the cloud, then tail the run's
+# logs.  First run prompts for login/link (interactive); afterwards it is
+# non-interactive.  BUILD_JOBS=1 is baked into the image, so no variables need
+# setting; the ~8 GB RAM floor is a one-time dashboard setting (the service's
+# Settings -> Resource Limits) — see uvm/vlt/README.md.  A green run ends with
+# `PASS:` / 0 UVM_ERROR lines and the container exits 0 (Railway: "Completed").
+railway-run:
+	@command -v $(RAILWAY) >/dev/null 2>&1 || { echo "[RAILWAY] '$(RAILWAY)' CLI not found: https://docs.railway.com/guides/cli"; exit 127; }
+	@$(RAILWAY) whoami   >/dev/null 2>&1 || $(RAILWAY) login
+	@$(RAILWAY) status   >/dev/null 2>&1 || $(RAILWAY) link
+	@echo "[RAILWAY] Uploading + building $(UVM_DOCKERFILE), then running the UVM gate (build logs at the URL below)..."
+	$(RAILWAY) up --detach
+	@echo "[RAILWAY] Deploy queued; watching for completion — returns to your prompt with PASS/FAIL when the run ends."
+	@RAILWAY='$(RAILWAY)' bash $(RAILWAY_WATCH)
+
+# Offline tests for the Docker/Railway plumbing (no Docker build, no network):
+# script syntax, railway-watch classifier self-test, entrypoint dispatch/preflight
+# with a mocked make, and a railway-run parse check.  Run in CI (docker-plumbing.yml).
+check-docker:
+	bash docker/plumbing-test.sh
+
+# ---- Unified metrics dashboard (PLAN item 8) --------------------------------
+# Aggregate coverage + UVM tops + cocotb + formal + perf, and compare/contrast
+# run environments (local/container/railway/ci), into report/{metrics.json,
+# report.md,report.html}.  Runs the *feasible* flows first (each tolerant of a
+# missing tool); UVM per-top metrics come from uvm/vlt/obj/<top>/run.log (from a
+# prior local top run, or CI/container env-*.json fragments — the heavy UVM
+# --binary build itself is not run here, it OOMs an ~8 GB host).
+REPORT_DIR ?= report
+GEN_REPORT := scripts/gen_report.py
+report:
+	@mkdir -p $(REPORT_DIR)/logs
+	@echo "[report] 1/4 coverage ..."
+	-$(MAKE) coverage
+	@echo "[report] 2/4 cocotb ..."
+	-$(MAKE) cocotb
+	@echo "[report] 3/4 formal ..."
+	-$(MAKE) formal 2>&1 | tee $(REPORT_DIR)/logs/formal.log
+	@echo "[report] 4/4 perf ..."
+	-$(MAKE) perf
+	@echo "[report] aggregating -> $(REPORT_DIR)/{metrics.json,report.md,report.html}"
+	python3 $(GEN_REPORT) --root $(CURDIR) --out $(CURDIR)/$(REPORT_DIR)
+
+# Advisory perf/quality gate over report/metrics.json (run after `make report`).
+# NOT part of the required `ci` gate — a sim wobble / partial run must not red it.
+report_check:
+	python3 $(GEN_REPORT) --out $(CURDIR)/$(REPORT_DIR) --check scripts/report_thresholds.json
+
+.PHONY: regress coverage cov-report cov-html perf perf-html pyuvm pyuvm-waves pyuvm-wave-view _cov_simple _cov_burst formal ci _lint_iverilog _lint_verilator \
+	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run check-docker report report_check
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \
 		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
 		coverage_simple.info coverage_burst.info coverage_regblock.info $(COV_REPORT_HTML) \
 		$(PERF_REPORT_HTML) $(PERF_METRICS)
-	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB) $(PERF_DIR)
+	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB) $(PERF_DIR) $(REPORT_DIR)
 	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/vcs clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/xcelium clean 2>/dev/null || true

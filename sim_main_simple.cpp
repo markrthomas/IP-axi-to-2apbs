@@ -15,10 +15,30 @@ static Vaxi4_to_apb4_2x_simple* top;
 
 // When non-zero, inject PSLVERR on the given port for the next APB access.
 static int g_slverr_port = -1;   // 0 or 1; -1 = no injection
+// Number of wait states the APB slave inserts before asserting PREADY.
+static int g_wait_states = 0;
+
+// Per-port wait-state countdown: decremented each cycle PENABLE is high;
+// PREADY is asserted only when the counter reaches zero.
+static int g_ws_cnt0 = 0;
+static int g_ws_cnt1 = 0;
 
 static void apb_slave() {
-    top->PREADY0  = top->PENABLE0;
-    top->PREADY1  = top->PENABLE1;
+    // Update per-port counters and drive PREADY.
+    if (top->PENABLE0) {
+        if (g_ws_cnt0 > 0) { g_ws_cnt0--; top->PREADY0 = 0; }
+        else                { top->PREADY0 = 1; }
+    } else {
+        g_ws_cnt0 = g_wait_states;
+        top->PREADY0 = 0;
+    }
+    if (top->PENABLE1) {
+        if (g_ws_cnt1 > 0) { g_ws_cnt1--; top->PREADY1 = 0; }
+        else                { top->PREADY1 = 1; }
+    } else {
+        g_ws_cnt1 = g_wait_states;
+        top->PREADY1 = 0;
+    }
     top->PRDATA0  = (uint64_t)0xDEADBEEFCAFEBABEULL;
     top->PRDATA1  = (uint64_t)0x0123456789ABCDEFULL;
     // Inject PSLVERR when requested: hold it high while PENABLE is asserted.
@@ -166,6 +186,16 @@ int main(int argc, char** argv) {
     read_single(0x00007000, /*arlen=*/0, /*arprot=*/5);
     write_single(0x80007000, 0xFEDCBA9876543210ULL, /*awlen=*/0, /*awprot=*/3);
     read_single(0x80007000, /*arlen=*/0, /*arprot=*/5);
+
+    // 12. Repeat a write and read with 2 APB wait states (WAIT_CYCLES=2) to
+    //     exercise the PREADY polling loop under realistic APB timing.
+    //     apb_slave() reloads g_ws_cnt* from g_wait_states whenever PENABLE is
+    //     deasserted, so updating g_wait_states here takes effect automatically
+    //     on the first idle cycle before the next APB access.
+    g_wait_states = 2;
+    write_single(0x00008000, 0xA5A5A5A5A5A5A5A5ULL);
+    read_single(0x00008000);
+    g_wait_states = 0;
 
     for (int i = 0; i < 8; i++) tick();
 

@@ -29,13 +29,21 @@ UVM_DPI := $(UVM_HOME)/v2020_3_1/dpi/uvm_dpi.cc
 # memory allows — CI sets BUILD_JOBS=$(nproc).
 BUILD_JOBS ?= 1
 
+# C++ flags for the generated model, forwarded to g++ via verilator --CFLAGS.
+# -O0 keeps the (large) UVM compile's RAM/time modest.  On a RAM-tight host where
+# even a single-job UVM precompiled-header compile OOM-kills cc1plus (e.g. a small
+# cloud instance), append GCC aggressive-GC params to slash peak RSS at the cost
+# of compile time, e.g.:
+#   make ... CFLAGS_MODEL='-O0 --param ggc-min-expand=1 --param ggc-min-heapsize=32768'
+# (also settable via the environment — the Docker image/Railway can export it).
+CFLAGS_MODEL ?= -O0
+
 # --binary: self-contained executable; --timing: UVM needs event/#delay support;
-# --vpi: UVM DPI/HDL backdoor. -Wno-fatal keeps library-side warnings non-fatal;
-# -O0 on the C++ side keeps the (large) UVM compile within a modest RAM budget.
+# --vpi: UVM DPI/HDL backdoor. -Wno-fatal keeps library-side warnings non-fatal.
 # -Wno-COVERIGN silences the (excluded) covergroup notes; width warnings stay
 # non-fatal via -Wno-fatal.
 VFLAGS ?= --binary --timing --vpi -j $(BUILD_JOBS) --build-jobs $(BUILD_JOBS) \
-          -Wno-fatal -Wno-COVERIGN --CFLAGS -O0
+          -Wno-fatal -Wno-COVERIGN --CFLAGS "$(CFLAGS_MODEL)"
 
 # Runtime plusargs common to every test.
 UVM_PLUSARGS ?= +UVM_NO_RELNOTES
@@ -95,12 +103,18 @@ define lint
 	  $(UVM_HDR) $(2) $(COMMON) $(TB)/$(1).sv
 endef
 
-.PHONY: all simple burst burst_ext parameterized \
+.PHONY: all ci simple burst burst_ext parameterized \
         regblock regblock-hw-reset regblock-bit-bash regblock-reg-access \
-        regblock-directed lint lint-simple lint-burst lint-burst_ext \
+        regblock-directed regblock-all lint lint-simple lint-burst lint-burst_ext \
         lint-parameterized lint-regblock clean
 
 all: simple burst burst_ext parameterized
+
+# Full license-free gate: elaborate-only lint of every top, then build + run
+# each top with the scoreboard/UVM_ERROR gate (all four regblock tests against
+# a single regblock build).  This is what the Docker/Railway image runs by
+# default — see Dockerfile and the repo-root .railway/railway.ts.
+ci: lint all regblock-all
 
 # lint every UVM top (elaborate-only; RAM-safe CI smoke check)
 lint: lint-simple lint-burst lint-burst_ext lint-parameterized lint-regblock
@@ -166,6 +180,14 @@ regblock-bit-bash: regblock
 regblock-reg-access: regblock
 	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_reg_access)
 regblock-directed: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_directed)
+
+# Build the regblock top once, then run all four register tests against it
+# (avoids four full --binary rebuilds).
+regblock-all: regblock
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_hw_reset)
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_bit_bash)
+	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_reg_access)
 	$(call run,tb_uvm_regblock,+UVM_TESTNAME=test_regblock_directed)
 
 clean:

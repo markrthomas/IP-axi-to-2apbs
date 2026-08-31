@@ -71,6 +71,7 @@ module axi4_to_apb4_2x_burst #(
     input  wire                      PSLVERR1
 );
 
+    // verilator coverage_off
     localparam EXPECTED_AXSIZE = (DATA_WIDTH == 1024) ? 3'b111 :
                                  (DATA_WIDTH == 512)  ? 3'b110 :
                                  (DATA_WIDTH == 256)  ? 3'b101 :
@@ -79,7 +80,7 @@ module axi4_to_apb4_2x_burst #(
                                  (DATA_WIDTH == 32)   ? 3'b010 :
                                  (DATA_WIDTH == 16)   ? 3'b001 :
                                  3'b000;
-
+    // verilator coverage_on
     reg [ID_WIDTH-1:0]           axi_id_reg;
     reg [ADDR_WIDTH-1:0]         axi_addr_reg;
     reg [2:0]                    axi_prot_reg;

@@ -1,0 +1,50 @@
+# -----------------------------------------------------------------------------
+# General DEV / TEST environment image (from PR merged into main).
+#
+# A repo-specific dev box: apt iverilog + verilator + a Python venv with
+# cocotb/pyuvm, defaulting to `make help`.  Good for the directed-SV and cocotb
+# flows.  NOTE: the apt Verilator here is NOT UVM-capable — for the UVM-on-
+# Verilator gate use the root `Dockerfile` (builds Verilator 5.050 from source)
+# and `make railway-run` / `make docker-uvm-run`.  See uvm/vlt/README.md.
+#
+#   Build:  docker build -f Dockerfile.dev -t ip-axi-2apbs-dev .
+#   Run  :  docker run --rm -it ip-axi-2apbs-dev            # -> make help
+#           docker run --rm ip-axi-2apbs-dev make cocotb
+# -----------------------------------------------------------------------------
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PATH="/opt/venv/bin:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    g++ \
+    make \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    iverilog \
+    verilator \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install cocotb pyuvm
+
+WORKDIR /workspace
+COPY . /workspace
+
+RUN groupadd --system dev && useradd --system --gid dev --create-home --home-dir /home/dev dev \
+    && chown -R dev:dev /workspace /opt/venv
+
+USER dev
+
+CMD ["bash", "-lc", "make help"]

@@ -74,6 +74,84 @@ down the whole session/VM**. Options:
   use the real header from `UVM_HOME` and never see this file).
 - `obj/` — build output (gitignored).
 
+## Docker / Railway — run the heavy build off-box
+
+The `--binary` build OOMs an ~8 GB host (see above). Besides GitHub Actions, the
+repo-root **`Dockerfile`** packages the whole flow — it builds UVM-capable
+Verilator 5.050 from source, bundles the UVM library at `UVM_HOME`, and its
+entrypoint (`docker/entrypoint.sh`) runs `make -C uvm/vlt ci` (lint + every top,
+scoreboard/`UVM_ERROR` gated). Run it on a RAM-generous container host (**~8 GB**
+— see the RAM floor below); [Railway](https://railway.com) (Hobby plan) is wired
+up via the repo-root `.railway/railway.ts` (Railway Infrastructure as Code;
+validate/apply with `npm install railway && railway config plan`).
+(This mirrors the sibling `axi-on-ucie-to-mem` image, except that flow pins
+oss-cad-suite's Verilator — here we must build 5.050 from source because the
+oss-cad-suite Verilator is not UVM-capable.)
+
+```sh
+# Local container run (needs a host with enough RAM for the --binary build):
+make docker-uvm-build          # build the image (root Dockerfile)
+make docker-uvm-run            # build + run the full UVM gate in the container
+#   DOCKER=podman  UVM_IMAGE=name:tag   # override the CLI / image tag
+
+# One top only (entrypoint injects VERILATOR/UVM_HOME/BUILD_JOBS):
+docker run --rm ip-axi-2apbs-uvm:latest make simple
+
+# Railway (one-shot job; restartPolicy NEVER in .railway/railway.ts):
+make railway-run                # END TO END: login/link (first run) + up, then wait
+#   and return to your prompt with a PASS/FAIL banner (no manual Ctrl-C).  Exits
+#   non-zero on a red gate.  Raise the service memory limit to ~8 GB first
+#   (dashboard) — see RAM floor below.  (Watcher: docker/railway-watch.sh.)
+# Or the granular steps:
+railway login && railway link   # once, to select the project/service
+make railway-deploy             # railway up — builds the Dockerfile in the cloud
+make railway-logs               # tail the run
+```
+
+Container/cloud specifics baked into the image + entrypoint:
+
+- **`VERILATOR_ROOT` unset** — the launcher derives its root from the bundled
+  install; the entrypoint drops any stale value defensively (a stale one
+  hard-errors the launcher — see above).
+- **RAM floor: ~8 GB.** The UVM precompiled-header compile (all of UVM in one
+  g++ TU) needs several GB. A **1 GB instance cannot build it at all** (cc1plus
+  is OOM-killed even at `-j1`); a Railway **Hobby** instance (up to 8 GB) clears
+  it, matching the 7 GB GitHub runner. On Railway, raise the service memory limit
+  (Settings → Resource Limits) before deploying.
+- **Fail-fast preflight.** Before any `--binary` build, the entrypoint reads the
+  container's cgroup memory limit and aborts in seconds (exit 3) if it is below
+  the floor — so a too-small instance fails immediately with actionable guidance
+  instead of OOM-killing cc1plus after ~10 minutes. Floor is 6144 MB; override
+  with `-e UVM_MIN_MEM_MB=N`, or skip the check with `-e UVM_SKIP_RESCHECK=1`.
+  Cheap `lint`/`clean` targets (~330 MB) are not gated.
+- **`BUILD_JOBS=1` default** — each PCH compile needs several GB, so two at once
+  OOM even an 8 GB box; serialize to one. Raise with `-e BUILD_JOBS=N` only where
+  RAM is ample. (Two *separate* pools OOM independently: the Docker *builder*
+  during the Verilator-from-source compile — bounded by the `VL_BUILD_JOBS` build
+  arg, default 2 — and the *runtime* instance during the `--binary` build —
+  bounded by `BUILD_JOBS`.)
+- **`CFLAGS_MODEL` knob** — on a RAM-tight box (e.g. trying 4 GB instead of 8),
+  `-e CFLAGS_MODEL='-O0 --param ggc-min-expand=1 --param ggc-min-heapsize=32768'`
+  forces GCC to garbage-collect aggressively, cutting cc1plus peak RSS ~30–50% at
+  the cost of compile time.
+- **Railway log filter** — the build echoes a ~500-char `g++` line per generated
+  file (thousands of files); Railway rate-limits log ingestion, so on Railway
+  (auto-detected) the entrypoint forwards only signal lines (UVM report lines,
+  banners, errors, PASS/FAIL) and tail-dumps the full transcript on failure.
+  Override with `-e UVM_CI_QUIET=1/0`.
+- **`z3`** is installed for run-time constraint solving; a **UTF-8 locale** is
+  forced so non-ASCII report output does not crash on a C/POSIX log sink.
+
+**CI coverage of this plumbing.** `.github/workflows/docker-plumbing.yml` runs on
+every push/PR (seconds, no Docker build): `make check-docker`
+(`docker/plumbing-test.sh`) — shell syntax + shellcheck, the `railway-watch.sh`
+PASS/FAIL classifier self-test, and the entrypoint dispatch/preflight logic
+against a mocked `make`. `.github/workflows/docker-image.yml` (path-gated to
+`Dockerfile`/`docker/**`, or manual) actually builds the image and exercises the
+entrypoint end-to-end (passthrough, preflight-abort exit 3, `make lint`). The UVM
+*simulation* correctness is covered separately by `verilator-sim.yml`, which runs
+the same tops directly on the runner.
+
 ## Verilator-specific divergences in the shared env
 
 The shared UVM sources carry `` `ifndef VERILATOR `` guards where behavior must

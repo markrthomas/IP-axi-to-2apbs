@@ -74,6 +74,7 @@ module axi4_to_apb4_2x_simple #(
     // Single-beat only: burst type and WLAST are don't-cares (AWLEN/ARLEN != 0 is rejected above).
     wire _unused_ok = &{1'b0, S_AXI_AWBURST, S_AXI_WLAST, S_AXI_ARBURST};
 
+    // verilator coverage_off
     localparam EXPECTED_AXSIZE = (DATA_WIDTH == 1024) ? 3'b111 :
                                  (DATA_WIDTH == 512)  ? 3'b110 :
                                  (DATA_WIDTH == 256)  ? 3'b101 :
@@ -82,7 +83,7 @@ module axi4_to_apb4_2x_simple #(
                                  (DATA_WIDTH == 32)   ? 3'b010 :
                                  (DATA_WIDTH == 16)   ? 3'b001 :
                                  3'b000;
-
+    // verilator coverage_on
     localparam ST_IDLE      = 3'd0;
     localparam ST_WRITE_APB = 3'd1;
     localparam ST_WRITE_RESP= 3'd2;

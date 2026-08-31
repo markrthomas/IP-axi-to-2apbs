@@ -1,0 +1,47 @@
+name: Docker CI smoke image
+
+# Build Dockerfile.ci (the full open-source toolchain image) and run the repo's
+# smoke checks inside it, so the image is actually exercised — an unbuilt image
+# silently rots (e.g. the non-existent `symbiyosys` apt package that once broke
+# it). Path-gated to the image definition (or manual dispatch); the RTL/test
+# correctness on every push is already covered by ci.yml on the bare runner.
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'Dockerfile.ci'
+      - '.github/workflows/docker-ci-image.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile.ci'
+      - '.github/workflows/docker-ci-image.yml'
+  workflow_dispatch:
+
+jobs:
+  ci-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+
+      - name: Build the CI smoke image
+        run: docker build -f Dockerfile.ci -t ip-axi-2apbs-ci .
+
+      - name: Toolchain present (iverilog + cocotb; verilator is apt 4.x)
+        run: |
+          docker run --rm ip-axi-2apbs-ci bash -lc '
+            set -e
+            iverilog -V | head -1
+            cocotb-config --version
+            verilator --version   # apt 4.x — see note below
+          '
+
+      # NOTE: ubuntu:22.04 apt Verilator is 4.x, which predates the Verilator-5
+      # lint codes (e.g. UNUSEDSIGNAL) the RTL uses, so `make check`/coverage/lint
+      # (Verilator flows) do NOT work in this image — use the root Dockerfile
+      # (Verilator 5.050 from source) for those.  The apt-compatible smoke is the
+      # iverilog directed regression + the icarus-backed cocotb suite.
+      - name: Smoke check inside the container (directed + cocotb, iverilog-backed)
+        run: |
+          docker run --rm ip-axi-2apbs-ci bash -lc 'set -e; make test && make cocotb'

@@ -349,7 +349,9 @@ package bridge_uvm_tests_pkg;
           for (int unsigned r = 0; r < n_rounds; r++) begin
             item = bridge_rand_item::type_id::create($sformatf("wr_%0d", r));
             item.is_write = 1;
-            if (!item.randomize())
+            // == 0 (not !): randomize() returns a 32-bit int, and LOGNOT on it
+            // trips the WIDTHTRUNC lint; the explicit compare is width-clean.
+            if (item.randomize() == 0)
               `uvm_fatal(get_type_name(), "randomize() failed")
             `uvm_info(get_type_name(),
                 $sformatf("[WR %0d] %s", r, item.convert2string()), UVM_MEDIUM)

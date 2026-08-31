@@ -40,7 +40,8 @@ behavior is specified in [`doc/design_contract.md`](doc/design_contract.md).
 
 - `src/` - canonical RTL entrypoints for the bridges
 - `test/` - canonical testbench entrypoints
-- `uvm/` - UVM-based verification environment (VCS and Xcelium targets)
+- `uvm/` - UVM-based verification environment (VCS and Xcelium targets); `uvm/vlt/` is the license-free open-source Verilator UVM flow
+- `Dockerfile`, `docker/`, `.railway/railway.ts` - containerized UVM-on-Verilator gate for off-box / cloud (Railway) runs; `.railway/railway.ts` is Railway Infrastructure as Code (replaces the deprecated `railway.toml`) — see `uvm/vlt/README.md`. `Dockerfile.dev` is the VS Code devcontainer image (`.devcontainer/`) and `Dockerfile.ci` the full-toolchain CI smoke image (`docker-ci-image.yml`)
 - `doc/` - documentation
 
 ## Design contract
@@ -60,10 +61,20 @@ flows run from the repo root (each degrades gracefully if its tool is absent):
 | PyUVM testbench | `make pyuvm` | Full pyUVM hierarchy (sequencer / driver / scoreboard) over the burst bridge. |
 | PyUVM waves | `make pyuvm-waves` / `make pyuvm-wave-view` | Randomized, seed-controlled run that dumps an FST and opens it in GTKWave with a grouped [save file](cocotb/pyuvm_waves/pyuvm_burst.gtkw). |
 | Formal | `make formal` | SymbiYosys BMC + cover (safety + liveness) proofs. |
-| Coverage | `make cov-report` / `make cov-html` | Verilator line/branch coverage → terminal table + self-contained HTML report. |
+| Coverage | `make cov-report` / `make cov-html` | Verilator line + toggle coverage → terminal table + self-contained HTML report (line is the enforced signal; toggle is informational — see `doc/coverage_notes.md`). |
 | Performance | `make perf` / `make perf-html` | Benchmarks the burst bridge and reports simulation speed and design cycles-per-beat / sustained bandwidth. |
+| UVM on Verilator | `make -C uvm/vlt lint` / `simple` / `ci` | License-free UVM env under open-source Verilator 5.050 (`uvm/vlt/README.md`). |
+| Container / cloud | `make docker-uvm-run` / `make railway-run` | Run the full UVM gate off-box in Docker or on Railway (one-shot deploy that returns PASS/FAIL); `make check-docker` runs the offline plumbing tests. |
+| Metrics dashboard | `make report` / `make report_check` | Aggregate coverage + UVM tops + cocotb + formal + perf into `report/{metrics.json,report.md,report.html}`, and **compare/contrast run environments** (local / container / Railway / CI). `report_check` is an advisory threshold gate. |
 
 Reproduce a specific random wave trace with `PYUVM_SEED=<n> make pyuvm-waves`.
+
+The **metrics dashboard** (`make report`) rolls up every flow above into one
+self-contained HTML report and shows the same UVM tops side by side across
+environments (walltime / peak RSS per top). A CI run publishes it as the
+`metrics-report` artifact (`verilator-sim.yml`); a container/Railway run echoes an
+`env-*.json` fragment you can drop into a local `report/` to add that environment
+to the comparison.
 
 ## Xcelium Tutorial
 

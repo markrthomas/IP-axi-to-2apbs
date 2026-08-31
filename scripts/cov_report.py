@@ -8,6 +8,16 @@ Usage:
     python3 scripts/cov_report.py [--out coverage_report.html] <file.info> ...
 
 The HTML file embeds all source code and requires no external assets.
+
+NOTE on the two metrics: `make coverage` runs Verilator with `--coverage`, which
+is line + toggle + user coverage — Verilator does NOT emit control-flow branch
+coverage.  `verilator_coverage --write-info` has no lcov record type for toggle
+points, so it encodes each one (one per signal bit per 0->1 / 1->0 edge) as a
+BRDA record.  We therefore report those BRDA counts honestly as **toggle
+coverage**, not "branch" coverage.  Toggle is inherently low under directed
+tests on wide datapaths (a 64-bit bus is 128 toggle points; a handful of data
+patterns exercises only a few of its bits), so line coverage is the enforced
+signal and toggle is informational.  See doc/coverage_notes.md.
 """
 
 from __future__ import annotations
@@ -27,9 +37,7 @@ from pathlib import Path
 class FileRecord:
     path: str
     da: dict[int, int] = field(default_factory=dict)   # line -> hit count
-    brda: dict[int, list[int]] = field(default_factory=dict)  # line -> branch counts
-    brf: int = 0
-    brh: int = 0
+    brda: dict[int, list[int]] = field(default_factory=dict)  # line -> toggle-point counts
 
     @property
     def lines_found(self) -> int:
@@ -43,9 +51,24 @@ class FileRecord:
     def line_pct(self) -> float:
         return 100.0 * self.lines_hit / self.lines_found if self.lines_found else 0.0
 
+    # Toggle coverage is computed from the BRDA records (each is one signal-bit
+    # edge; Verilator emits no control-flow branch coverage).  We deliberately do
+    # NOT use the file's BRF/BRH summary lines: verilator_coverage writes a BRH
+    # that is inconsistent with its own BRDA data (e.g. BRH=55 while 939 of 1601
+    # BRDA points have taken>0), which under-reports toggle by ~10x.  Counting the
+    # BRDA points directly is lcov-standard and agrees with scripts/gen_report.py.
     @property
-    def branch_pct(self) -> float:
-        return 100.0 * self.brh / self.brf if self.brf else 0.0
+    def toggles_found(self) -> int:
+        return sum(len(v) for v in self.brda.values())
+
+    @property
+    def toggles_hit(self) -> int:
+        return sum(1 for v in self.brda.values() for c in v if c > 0)
+
+    @property
+    def toggle_pct(self) -> float:
+        tf = self.toggles_found
+        return 100.0 * self.toggles_hit / tf if tf else 0.0
 
 
 def parse_info(path: Path) -> list[FileRecord]:
@@ -72,16 +95,8 @@ def parse_info(path: Path) -> list[FileRecord]:
                     cur.brda.setdefault(ln, []).append(cnt)
                 except ValueError:
                     pass
-        elif line.startswith("BRF:") and cur is not None:
-            try:
-                cur.brf = int(line[4:])
-            except ValueError:
-                pass
-        elif line.startswith("BRH:") and cur is not None:
-            try:
-                cur.brh = int(line[4:])
-            except ValueError:
-                pass
+        # BRF:/BRH: summary lines are intentionally ignored — verilator_coverage
+        # writes a BRH inconsistent with its BRDA data (see FileRecord.toggle_pct).
         elif line in ("end_of_record", "end_record") and cur is not None:
             records.append(cur)
             cur = None
@@ -101,18 +116,11 @@ def _bar(pct: float) -> str:
     filled = round(pct / 100 * _BAR_W)
     return _BAR * filled + "░" * (_BAR_W - filled)
 
-def _grade(pct: float) -> str:
-    if pct >= 90:
-        return "✓"
-    if pct >= 70:
-        return "~"
-    return "✗"
-
 def print_terminal(records: list[FileRecord], title: str) -> None:
     print(f"\n{'─'*72}")
     print(f"  Coverage report: {title}")
     print(f"{'─'*72}")
-    hdr = f"  {'File':<38} {'Lines':>6}  {'Bar':<22} {'Branch':>7}"
+    hdr = f"  {'File':<38} {'Lines':>6}  {'Bar':<22} {'Toggle':>7}"
     print(hdr)
     print(f"  {'─'*38}  {'─'*6}  {'─'*22}  {'─'*7}")
 
@@ -120,19 +128,20 @@ def print_terminal(records: list[FileRecord], title: str) -> None:
     for rec in records:
         name = Path(rec.path).name
         lp = rec.line_pct
-        bp = rec.branch_pct
+        tp = rec.toggle_pct
         totals_lf  += rec.lines_found
         totals_lh  += rec.lines_hit
-        totals_brf += rec.brf
-        totals_brh += rec.brh
+        totals_brf += rec.toggles_found
+        totals_brh += rec.toggles_hit
         bar = _bar(lp)
-        print(f"  {name:<38} {lp:5.1f}%  {bar}  {bp:6.1f}%  {_grade(bp)}")
+        print(f"  {name:<38} {lp:5.1f}%  {bar}  {tp:6.1f}%")
 
     print(f"  {'─'*38}  {'─'*6}  {'─'*22}  {'─'*7}")
     tot_lp = 100.0 * totals_lh / totals_lf if totals_lf else 0.0
-    tot_bp = 100.0 * totals_brh / totals_brf if totals_brf else 0.0
-    print(f"  {'TOTAL':<38} {tot_lp:5.1f}%  {_bar(tot_lp)}  {tot_bp:6.1f}%  {_grade(tot_bp)}")
-    print(f"  Lines: {totals_lh}/{totals_lf}    Branches: {totals_brh}/{totals_brf}")
+    tot_tp = 100.0 * totals_brh / totals_brf if totals_brf else 0.0
+    print(f"  {'TOTAL':<38} {tot_lp:5.1f}%  {_bar(tot_lp)}  {tot_tp:6.1f}%")
+    print(f"  Lines: {totals_lh}/{totals_lf}    Toggle bits: {totals_brh}/{totals_brf}")
+    print(f"  (toggle is informational — see doc/coverage_notes.md; line coverage is the gate)")
     print(f"{'─'*72}\n")
 
 
@@ -192,9 +201,9 @@ def _bar_html(pct: float) -> str:
 def _source_section(rec: FileRecord, root: Path) -> str:
     src_path = root / rec.path
     lp = rec.line_pct
-    bp = rec.branch_pct
+    tp = rec.toggle_pct
     heading = (f"{rec.path}  —  lines {rec.lines_hit}/{rec.lines_found} "
-               f"({lp:.1f}%)  branches {rec.brh}/{rec.brf} ({bp:.1f}%)")
+               f"({lp:.1f}%)  toggle bits {rec.toggles_hit}/{rec.toggles_found} ({tp:.1f}%)")
 
     lines_html: list[str] = []
     if src_path.exists():
@@ -240,15 +249,15 @@ def write_html(all_records: list[tuple[str, list[FileRecord]]],
     for label, records in all_records:
         for rec in records:
             lp = rec.line_pct
-            bp = rec.branch_pct
+            tp = rec.toggle_pct
             rows.append(
                 f"<tr>"
                 f"<td>{html.escape(label)}</td>"
                 f"<td>{html.escape(rec.path)}</td>"
                 f"<td>{_bar_html(lp)}</td>"
                 f"<td>{rec.lines_hit}/{rec.lines_found}</td>"
-                f"<td>{_bar_html(bp)}</td>"
-                f"<td>{rec.brh}/{rec.brf}</td>"
+                f"<td>{_bar_html(tp)}</td>"
+                f"<td>{rec.toggles_hit}/{rec.toggles_found}</td>"
                 f"</tr>"
             )
             source_sections.append(f"<h2>{html.escape(label)} — {html.escape(rec.path)}</h2>")
@@ -259,7 +268,7 @@ def write_html(all_records: list[tuple[str, list[FileRecord]]],
         "<thead><tr>"
         "<th>Suite</th><th>File</th>"
         "<th>Line coverage</th><th>Lines hit</th>"
-        "<th>Branch coverage</th><th>Branches hit</th>"
+        "<th>Toggle coverage</th><th>Toggle bits hit</th>"
         "</tr></thead>"
         "<tbody>" + "\n".join(rows) + "</tbody>"
         "</table>"
@@ -273,7 +282,14 @@ def write_html(all_records: list[tuple[str, list[FileRecord]]],
         f"<style>{_CSS}</style>"
         "</head><body>"
         "<h1>Verilator Coverage Report</h1>"
-        f"<div class='summary'>{table}</div>"
+        "<div class='summary'>"
+        "<p style='margin-bottom:12px;color:#a6adc8'>Line coverage is the enforced "
+        "signal. <b>Toggle coverage</b> counts signal-bit transitions "
+        "(Verilator emits no control-flow branch coverage; the lcov BRDA records "
+        "are toggle points) and is informational &mdash; it is inherently low on "
+        "wide datapaths under directed tests. See "
+        "<code>doc/coverage_notes.md</code>.</p>"
+        f"{table}</div>"
         + "\n".join(source_sections)
         + f"<script>{_JS}</script>"
         "</body></html>"

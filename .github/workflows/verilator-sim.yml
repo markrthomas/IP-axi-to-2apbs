@@ -27,7 +27,7 @@ jobs:
 
     steps:
     - name: Check out repository code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     # Cache the whole Verilator install (bin + share + bundled UVM lib) keyed on
     # the pinned ref, so the ~10-minute source build runs only on cache miss.
@@ -147,5 +147,25 @@ jobs:
       with:
         name: uvm-verilator-logs
         path: uvm/vlt/obj/**/*.log
+        retention-days: 7
+        if-no-files-found: ignore
+
+    # Aggregate this CI run's per-top UVM metrics into the dashboard (PLAN item 8).
+    # env=ci; the run.logs above supply per-top status/walltime/peak MB. The
+    # env-ci.json fragment lets a combined report compare CI vs local/container.
+    - name: Generate metrics report (env=ci)
+      if: always()
+      run: python3 scripts/gen_report.py --root . --out report --env ci
+
+    - name: Upload metrics report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: metrics-report
+        path: |
+          report/report.html
+          report/metrics.json
+          report/environments.json
+          report/env-ci.json
         retention-days: 7
         if-no-files-found: ignore

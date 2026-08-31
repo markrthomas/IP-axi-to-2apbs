@@ -1,0 +1,8 @@
+{
+  "_comment": "Advisory perf/quality thresholds for `make report_check` (PLAN item 8). Opt-in — NOT wired into the required CI gate, so a sim wobble or a partial local run never reds the build. Only metrics present in report/metrics.json are checked. Baselines (verified 2026-08-31, local): line 100%, toggle 60.5% pooled (2443/4037), formal 2/2 PASS. NOTE: the second Verilator coverage metric is TOGGLE coverage, not branch — Verilator emits no control-flow branch coverage, and toggle points are counted from the lcov BRDA records (the BRF/BRH summary lines verilator_coverage writes are inconsistent and ignored). See doc/coverage_notes.md. min_toggle_coverage_pct is a floor with margin below the 60.5% baseline so a large regression is caught; line coverage is the primary enforced signal.",
+  "min_line_coverage_pct": 95.0,
+  "min_toggle_coverage_pct": 55.0,
+  "require_uvm_tops_clean": true,
+  "require_formal_pass": true,
+  "min_cocotb_pass_rate": 100.0
+}
