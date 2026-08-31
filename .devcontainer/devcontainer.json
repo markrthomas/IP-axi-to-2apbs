@@ -1,0 +1,8 @@
+{
+  "name": "IP AXI to 2 APB4",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "make regress && make check-uvm-mirror"
+}
