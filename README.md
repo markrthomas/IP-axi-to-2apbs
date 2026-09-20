@@ -91,6 +91,9 @@ techniques, and adding your own test class — all using this bridge as the lab 
 ## Quick start
 
 Running **`make`** with no arguments prints **help** with all common targets.
+The `help`/`lint`/`check`/`regress`/`coverage`/`formal`/`ci`/`clean` gate
+targets follow the shared cross-repo convention in
+[`DV_STANDARDS.md`](DV_STANDARDS.md).
 
 | Goal | Command |
 |------|---------|
