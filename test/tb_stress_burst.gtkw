@@ -1,0 +1,142 @@
+[*]
+[*] GTKWave save file for the randomised stress testbench (tb_stress_burst,
+[*] DUT: axi4_to_apb4_2x_burst).
+[*] Loaded automatically by:  make gtk  (default WAVETB=stress)  /  make gtk-stress
+[*] Signals are organised into collapsible groups per AXI/APB channel plus the
+[*] bridge's internal state.  Buses default to hex.  Regenerate the trace with
+[*] `make wave-stress` (optionally STRESS_N=/STRESS_SEED=/... ) before viewing.
+[*]
+[dumpfile] "waves_stress.fst"
+[savefile] "tb_stress_burst.gtkw"
+[timestart] 0
+[size] 1400 900
+[pos] -1 -1
+*-24.000000 0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_stress_burst.
+[sst_width] 260
+[signals_width] 300
+[sst_expanded] 1
+[sst_vpaned_height] 200
+@28
+tb_stress_burst.ACLK
+tb_stress_burst.ARESETn
+@800022
+-AXI Write Address
+@28
+tb_stress_burst.S_AXI_AWVALID
+tb_stress_burst.S_AXI_AWREADY
+@22
+tb_stress_burst.S_AXI_AWID[3:0]
+tb_stress_burst.S_AXI_AWADDR[31:0]
+tb_stress_burst.S_AXI_AWLEN[7:0]
+tb_stress_burst.S_AXI_AWSIZE[2:0]
+tb_stress_burst.S_AXI_AWBURST[1:0]
+tb_stress_burst.S_AXI_AWPROT[2:0]
+@1401200
+-AXI Write Address
+@800022
+-AXI Write Data
+@28
+tb_stress_burst.S_AXI_WVALID
+tb_stress_burst.S_AXI_WREADY
+tb_stress_burst.S_AXI_WLAST
+@22
+tb_stress_burst.S_AXI_WDATA[63:0]
+tb_stress_burst.S_AXI_WSTRB[7:0]
+@1401200
+-AXI Write Data
+@800022
+-AXI Write Response
+@28
+tb_stress_burst.S_AXI_BVALID
+tb_stress_burst.S_AXI_BREADY
+@22
+tb_stress_burst.S_AXI_BID[3:0]
+tb_stress_burst.S_AXI_BRESP[1:0]
+@1401200
+-AXI Write Response
+@800022
+-AXI Read Address
+@28
+tb_stress_burst.S_AXI_ARVALID
+tb_stress_burst.S_AXI_ARREADY
+@22
+tb_stress_burst.S_AXI_ARID[3:0]
+tb_stress_burst.S_AXI_ARADDR[31:0]
+tb_stress_burst.S_AXI_ARLEN[7:0]
+tb_stress_burst.S_AXI_ARSIZE[2:0]
+tb_stress_burst.S_AXI_ARBURST[1:0]
+tb_stress_burst.S_AXI_ARPROT[2:0]
+@1401200
+-AXI Read Address
+@800022
+-AXI Read Data
+@28
+tb_stress_burst.S_AXI_RVALID
+tb_stress_burst.S_AXI_RREADY
+tb_stress_burst.S_AXI_RLAST
+@22
+tb_stress_burst.S_AXI_RID[3:0]
+tb_stress_burst.S_AXI_RDATA[63:0]
+tb_stress_burst.S_AXI_RRESP[1:0]
+@1401200
+-AXI Read Data
+@800022
+-APB0 Port
+@28
+tb_stress_burst.PSEL0
+tb_stress_burst.PENABLE0
+tb_stress_burst.PWRITE0
+tb_stress_burst.PREADY0
+tb_stress_burst.PSLVERR0
+@22
+tb_stress_burst.PADDR0[31:0]
+tb_stress_burst.PWDATA0[63:0]
+tb_stress_burst.PRDATA0[63:0]
+tb_stress_burst.PSTRB0[7:0]
+tb_stress_burst.PPROT0[2:0]
+@1401200
+-APB0 Port
+@800022
+-APB1 Port
+@28
+tb_stress_burst.PSEL1
+tb_stress_burst.PENABLE1
+tb_stress_burst.PWRITE1
+tb_stress_burst.PREADY1
+tb_stress_burst.PSLVERR1
+@22
+tb_stress_burst.PADDR1[31:0]
+tb_stress_burst.PWDATA1[63:0]
+tb_stress_burst.PRDATA1[63:0]
+tb_stress_burst.PSTRB1[7:0]
+tb_stress_burst.PPROT1[2:0]
+@1401200
+-APB1 Port
+@800022
+-Bridge State
+@28
+tb_stress_burst.dut.txn_active
+tb_stress_burst.dut.axi_is_write
+tb_stress_burst.dut.axi_sel_apb1
+tb_stress_burst.dut.w_done
+tb_stress_burst.dut.wlast_err
+tb_stress_burst.dut.txn_decerr
+tb_stress_burst.dut.pslverr_acc
+@22
+tb_stress_burst.dut.apb_state[1:0]
+tb_stress_burst.dut.beat_index[8:0]
+tb_stress_burst.dut.beats_total[8:0]
+tb_stress_burst.dut.axi_addr_reg[31:0]
+@1401200
+-Bridge State
+@800022
+-Stress Test Bookkeeping
+@22
+tb_stress_burst.txn_cnt
+tb_stress_burst.err_cnt
+tb_stress_burst.txn_type
+@1401200
+-Stress Test Bookkeeping
+[pattern_trace] 1
+[pattern_trace] 0
