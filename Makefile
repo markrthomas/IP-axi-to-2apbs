@@ -90,7 +90,11 @@ else
 endif
 
 # Default bench for: make wave | make gtk | make sim
-WAVETB ?= simple
+# stress = tb_stress_burst.v, a randomised, self-checking mixed-transaction
+# regression (STRESS_N=200 random single/burst writes+reads by default) — the
+# default so an unqualified `make wave`/`make gtk` shows real, varied traffic
+# rather than one fixed directed sequence.
+WAVETB ?= stress
 
 .PHONY: help default test test-all test-full check check-full check-uvm check-uvm-mirror lint-uvm-sv lint-uvm-sv-relaxed \
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
@@ -125,17 +129,17 @@ help:
 	@echo "    STRESS_N=500 STRESS_SEED=7 STRESS_WAIT0=2 STRESS_WAIT1=0 STRESS_BP=4"
 	@echo ""
 	@echo "  Build simulators only:"
-	@echo "    make sim                    # WAVETB=simple|burst|burst-ext|simple-ws|param"
+	@echo "    make sim                    # WAVETB=stress|simple|burst|burst-ext|simple-ws|param (default: stress)"
 	@echo "    make sim_simple sim_burst ..."
 	@echo ""
 	@echo "  Waveforms (then open GTKWave yourself, or use gtk targets below):"
-	@echo "    make wave                   # WAVETB=simple|burst|burst-ext|simple-ws|param"
-	@echo "    make wave-simple | wave-burst | ..."
+	@echo "    make wave                   # WAVETB=stress|simple|burst|burst-ext|simple-ws|param (default: stress)"
+	@echo "    make wave-simple | wave-burst | wave-stress | ..."
 	@echo "    WAVEFMT=fst|vcd   WAVEFILE=path   WAIT_CYCLES=n (for simple-ws)"
 	@echo ""
 	@echo "  GTKWave (simulate + launch viewer):"
-	@echo "    make gtk                    # uses WAVETB (default: simple)"
-	@echo "    make gtk-simple | gtk-burst | gtk-burst-ext | gtk-simple-ws | gtk-param"
+	@echo "    make gtk                    # uses WAVETB (default: stress); opens test/tb_stress_burst.gtkw"
+	@echo "    make gtk-stress | gtk-simple | gtk-burst | gtk-burst-ext | gtk-simple-ws | gtk-param"
 	@echo "    GTKWAVE=/path/to/gtkwave  GTKWAVE_FLAGS='...'"
 	@echo ""
 	@echo "  UVM mirror (no VCS required):"
@@ -338,9 +342,16 @@ wave-stress: sim_stress
 	  +WAIT0=$(STRESS_WAIT0) +WAIT1=$(STRESS_WAIT1) +BP=$(STRESS_BP) \
 	  +wave +wavefile=$(WAVEFILE)
 
+# Curated GTKWave save file: top-level DUT interface signals (AXI channels,
+# both APB ports, bridge internal state) grouped by function. Opened
+# automatically since gtk-stress is the make wave/gtk default (WAVETB=stress).
+STRESS_GTKW := $(CURDIR)/test/tb_stress_burst.gtkw
+
 gtk-stress: WAVEFILE ?= waves_stress.fst
 gtk-stress: wave-stress
-	$(GTK_OPEN)
+	@printf 'Opening %s in GTKWave (grouped: %s)...\n' "$(WAVEFILE)" "$(STRESS_GTKW)"; \
+	command -v "$(GTKWAVE)" >/dev/null 2>&1 || { printf '%s\n' "Missing viewer: install gtkwave or set GTKWAVE=/path/to/gtkwave" >&2; exit 127; }; \
+	$(GTKWAVE) $(GTKWAVE_FLAGS) "$(WAVEFILE)" "$(STRESS_GTKW)" &
 
 ifeq ($(WAVETB),simple)
   SIM_BIN := sim_simple
@@ -352,8 +363,10 @@ else ifeq ($(WAVETB),simple-ws)
   SIM_BIN := sim_simple_ws_$(WAIT_CYCLES)
 else ifeq ($(WAVETB),param)
   SIM_BIN := sim_param
+else ifeq ($(WAVETB),stress)
+  SIM_BIN := sim_stress
 else
-  $(error Unknown WAVETB '$(WAVETB)'. Use: simple burst burst-ext simple-ws param)
+  $(error Unknown WAVETB '$(WAVETB)'. Use: simple burst burst-ext simple-ws param stress)
 endif
 
 # Unified wave default (depends on WAVETB). Keep this target-specific so the
@@ -368,6 +381,8 @@ else ifeq ($(WAVETB),simple-ws)
   wave: WAVEFILE ?= waves_simple_ws.$(WAVEFMT)
 else ifeq ($(WAVETB),param)
   wave: WAVEFILE ?= waves_param.$(WAVEFMT)
+else ifeq ($(WAVETB),stress)
+  wave: WAVEFILE ?= waves_stress.$(WAVEFMT)
 endif
 
 sim: $(SIM_BIN)
