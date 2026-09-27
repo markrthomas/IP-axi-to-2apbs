@@ -100,7 +100,7 @@ WAVETB ?= stress
 	test-simple test-simple-ws test-simple-ws-sweep test-burst test-burst-ext test-param \
 	test-stress wave-stress gtk-stress test-regblock \
 	lint clean sim readme-pdf readme-md-pdfs md-pdfs \
-	wave wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
+	wave waves wave-simple wave-burst wave-burst-ext wave-simple-ws wave-param \
 	gtk gtk-simple gtk-burst gtk-burst-ext gtk-simple-ws gtk-param \
 	regress coverage cov-report formal ci cocotb cocotb-regblock _lint_iverilog _lint_verilator \
 	_cov_regblock \
@@ -132,8 +132,10 @@ help:
 	@echo "    make sim                    # WAVETB=stress|simple|burst|burst-ext|simple-ws|param (default: stress)"
 	@echo "    make sim_simple sim_burst ..."
 	@echo ""
-	@echo "  Waveforms (then open GTKWave yourself, or use gtk targets below):"
-	@echo "    make wave                   # WAVETB=stress|simple|burst|burst-ext|simple-ws|param (default: stress)"
+	@echo "  Waveforms:"
+	@echo "    make wave                   # random stress run (fresh STRESS_SEED; STRESS_SEED=n replays) -> FST,"
+	@echo "                                #   then GTKWave w/ test/tb_stress_burst.gtkw, zoomed to fit"
+	@echo "    make waves                  # dump only; WAVETB=stress|simple|burst|burst-ext|simple-ws|param (default: stress)"
 	@echo "    make wave-simple | wave-burst | wave-stress | ..."
 	@echo "    WAVEFMT=fst|vcd   WAVEFILE=path   WAIT_CYCLES=n (for simple-ws)"
 	@echo ""
@@ -369,20 +371,20 @@ else
   $(error Unknown WAVETB '$(WAVETB)'. Use: simple burst burst-ext simple-ws param stress)
 endif
 
-# Unified wave default (depends on WAVETB). Keep this target-specific so the
+# Unified waves default (depends on WAVETB). Keep this target-specific so the
 # explicit wave-* targets can use their own WAVEFILE defaults.
 ifeq ($(WAVETB),simple)
-  wave: WAVEFILE ?= waves_simple.$(WAVEFMT)
+  waves: WAVEFILE ?= waves_simple.$(WAVEFMT)
 else ifeq ($(WAVETB),burst)
-  wave: WAVEFILE ?= waves_burst.$(WAVEFMT)
+  waves: WAVEFILE ?= waves_burst.$(WAVEFMT)
 else ifeq ($(WAVETB),burst-ext)
-  wave: WAVEFILE ?= waves_burst_ext.$(WAVEFMT)
+  waves: WAVEFILE ?= waves_burst_ext.$(WAVEFMT)
 else ifeq ($(WAVETB),simple-ws)
-  wave: WAVEFILE ?= waves_simple_ws.$(WAVEFMT)
+  waves: WAVEFILE ?= waves_simple_ws.$(WAVEFMT)
 else ifeq ($(WAVETB),param)
-  wave: WAVEFILE ?= waves_param.$(WAVEFMT)
+  waves: WAVEFILE ?= waves_param.$(WAVEFMT)
 else ifeq ($(WAVETB),stress)
-  wave: WAVEFILE ?= waves_stress.$(WAVEFMT)
+  waves: WAVEFILE ?= waves_stress.$(WAVEFMT)
 endif
 
 sim: $(SIM_BIN)
@@ -390,9 +392,39 @@ sim: $(SIM_BIN)
 
 # --- waves -------------------------------------------------------------------
 
-# Override path: make wave WAVEFILE=mytrace.fst
-wave: $(SIM_BIN)
+# Dump only (DV_STANDARDS.md `waves`). Override path: make waves WAVEFILE=mytrace.fst
+waves: $(SIM_BIN)
 	$(VVP) $(SIM_BIN) $(VVP_WAVEFLAGS) +wave +wavefile=$(WAVEFILE)
+
+# `make wave`: one random test end to end (DV_STANDARDS.md `wave`). With the
+# default WAVETB=stress it runs tb_stress_burst with a fresh random STRESS_SEED
+# (printed; STRESS_SEED=<n> replays), dumps waves_stress.fst, reports PASS/FAIL
+# from the log and opens GTKWave with test/tb_stress_burst.gtkw, zoomed to fit
+# (test/zoom_full.tcl). Other WAVETB values dump that directed TB and open it
+# without a layout. Waves open on a FAIL too; no gtkwave on PATH is a clean skip.
+WAVE_SEED := $(if $(filter command line environment,$(origin STRESS_SEED)),$(STRESS_SEED),$(shell echo $$(( $$(od -An -N4 -tu4 /dev/urandom) % 2147483646 + 1 ))))
+ifeq ($(WAVETB),stress)
+WAVE_OUT  := waves_stress.fst
+WAVE_GTKW := $(STRESS_GTKW)
+else
+WAVE_OUT  := waves_$(subst -,_,$(WAVETB)).fst
+WAVE_GTKW :=
+endif
+wave:
+ifeq ($(WAVETB),stress)
+	@echo "[WAVE] tb_stress_burst with random seed: STRESS_SEED=$(WAVE_SEED)"
+	@$(MAKE) --no-print-directory wave-stress STRESS_SEED=$(WAVE_SEED) WAVEFILE=$(WAVE_OUT) | tee waves_stress.log
+	@if grep -q "STRESS PASS" waves_stress.log; then echo "[WAVE] PASS (STRESS_SEED=$(WAVE_SEED))"; \
+	else echo "[WAVE] *** TEST FAILED (STRESS_SEED=$(WAVE_SEED)) — opening waves for debug ***"; fi
+else
+	@$(MAKE) --no-print-directory waves WAVEFMT=fst WAVEFILE=$(WAVE_OUT)
+endif
+	@if command -v "$(GTKWAVE)" >/dev/null 2>&1; then \
+		echo "[WAVE] opening $(WAVE_OUT) $(if $(WAVE_GTKW),with $(notdir $(WAVE_GTKW)))"; \
+		exec $(GTKWAVE) $(GTKWAVE_FLAGS) -S test/zoom_full.tcl "$(WAVE_OUT)" $(WAVE_GTKW); \
+	else \
+		echo "[WAVE] gtkwave not on PATH — dump is at $(WAVE_OUT)"; \
+	fi
 
 wave-simple: WAVEFILE ?= waves_simple.$(WAVEFMT)
 wave-simple: sim_simple
@@ -733,7 +765,7 @@ report_check:
 
 clean:
 	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \
-		waves_*.fst waves_*.vcd burst.vcd param.vcd $(ALL_MD_PDF) \
+		waves_*.fst waves_*.vcd waves_stress.log burst.vcd param.vcd $(ALL_MD_PDF) \
 		coverage_simple.info coverage_burst.info coverage_regblock.info $(COV_REPORT_HTML) \
 		$(PERF_REPORT_HTML) $(PERF_METRICS)
 	rm -rf $(COV_DIR_SIMPLE) $(COV_DIR_BURST) $(COV_DIR_RB) $(PERF_DIR) $(REPORT_DIR)

@@ -102,7 +102,8 @@ targets follow the shared cross-repo convention in
 | Lint + fast regression | `make check` |
 | Lint + full TB set | `make check-full` |
 | Build one simulator executable | `make sim WAVETB=simple` (see `make help`) |
-| Dump FST/VCD without opening viewer | `make wave` or `make wave-simple` … |
+| Random stress run → FST → GTKWave (layout, zoomed to fit) | `make wave` (fresh `STRESS_SEED` each run; `STRESS_SEED=<n>` replays) |
+| Dump FST/VCD without opening viewer | `make waves` or `make wave-simple` … |
 | Run sim and open GTKWave | `make gtk` or `make gtk-simple` … |
 
 Individual tests still map to **`make test-simple`**, **`make test-burst`**, **`make test-burst-ext`**, **`make test-param`**, **`make test-simple-ws`**.
@@ -133,9 +134,10 @@ From the repo root:
 With [Icarus `vvp`](https://steveicarus.github.io/iverilog/usage/waveform_viewer.html), dumps are enabled with **`+wave`**. For **FST** (compact, good for GTKWave), use a **`.fst` filename** and pass **`-fst`** as an extended argument **after** the compiled simulator name (some toolchains mis-parse **`-fst`** if it appears before the binary):
 
 ```bash
-make wave                          # WAVETB=simple → waves_simple.fst
-make wave WAVETB=burst
-make wave WAVETB=simple-ws WAIT_CYCLES=1
+make wave                          # random stress run → waves_stress.fst, opened in GTKWave
+make waves WAVETB=simple           # dump only → waves_simple.fst
+make waves WAVETB=burst
+make waves WAVETB=simple-ws WAIT_CYCLES=1
 make wave-simple WAVEFMT=vcd       # waves_simple.vcd, no -fst
 ```
 

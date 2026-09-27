@@ -51,3 +51,6 @@ uvm/vcs/simv.daidir/
 # Node (only used transiently for `railway config plan/apply`)
 node_modules/
 package-lock.json
+
+# make wave run log
+waves_stress.log
