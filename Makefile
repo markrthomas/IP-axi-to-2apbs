@@ -177,6 +177,7 @@ help:
 	@echo "    make cov-html                     # cov-report, then open the HTML in a browser"
 	@echo "    COV_REPORT_HTML=my.html make cov-report"
 	@echo "    make coverage                     # build + run only (produces .info files)"
+	@echo "    make stress                       # stress / randomized simulation (n/a stub if none)"
 	@echo ""
 	@echo "  Performance:"
 	@echo "    make perf                         # benchmark burst bridge + terminal table + perf_report.html"
@@ -772,3 +773,7 @@ clean:
 	$(MAKE) -C $(CURDIR)/verification/formal clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/vcs clean 2>/dev/null || true
 	$(MAKE) -C $(CURDIR)/uvm/xcelium clean 2>/dev/null || true
+
+# Standard DV target (DV_STANDARDS.md): stress = randomized burst stress sim
+.PHONY: stress
+stress: test-stress
