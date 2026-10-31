@@ -12,6 +12,14 @@
 #   <anything else>  -> exec verbatim (shell, verilator --version, ...)
 set -euo pipefail
 
+# dv-swarm-kit: swarm / agent modes (this entrypoint is otherwise repo-owned: KIT_KEEP in .claude/swarm.env).
+# Prefer a checkout mounted at /repo (the swarm workflow mounts one so the swarm can push), else the baked-in repo.
+_kit_root=/work; [ -f /repo/.claude/swarm.env ] && _kit_root=/repo
+case "${1:-}" in
+  swarm)        shift; exec "$_kit_root/docker/swarm.sh" "$@" ;;
+  agent|claude) shift; exec "$_kit_root/docker/swarm.sh" --prompt "${*:-${CLAUDE_TASK:-}}" --agent none ;;
+esac
+
 # A stale VERILATOR_ROOT hard-errors the launcher; the uvm/vlt flow doesn't need
 # it (verilator derives its root from its own path).  Drop it defensively.
 unset VERILATOR_ROOT || true

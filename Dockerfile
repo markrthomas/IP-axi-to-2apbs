@@ -56,7 +56,7 @@ RUN mkdir -p "${VERILATOR_PREFIX}/uvm" \
     && cp -a test_regress/t/uvm/. "${VERILATOR_PREFIX}/uvm/"
 
 # ---- Stage 2: runtime image that builds + runs the UVM env ------------------
-FROM ubuntu:24.04 AS uvm
+FROM ubuntu:24.04 AS tools
 
 ARG VERILATOR_PREFIX=/opt/verilator
 ENV DEBIAN_FRONTEND=noninteractive
@@ -95,6 +95,16 @@ ENV VERILATOR="${VERILATOR_PREFIX}/bin/verilator" \
 # raise it only on a host with ample RAM.  The entrypoint passes it as BUILD_JOBS.
 ENV BUILD_JOBS=1
 
+# dv-swarm-kit: Claude Code CLI + git + gh for swarm runs (devcontainer, swarm workflow, Railway swarm service).
+ARG WITH_CLAUDE=0
+RUN if [ "$WITH_CLAUDE" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends git nodejs npm gh \
+      && npm install -g @anthropic-ai/claude-code && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# --- uvm: toolchain (`tools`, also the devcontainer target) + this repo ---------------------------------
+FROM tools AS uvm
+
 WORKDIR /work
 COPY . /work
 
@@ -112,3 +122,7 @@ RUN "${VERILATOR}" --version \
 #   docker run --rm ip-axi-2apbs-uvm make simple
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD []
+
+
+# dv-swarm-kit: the swarm workflow builds --target full; same content as the stage above.
+FROM uvm AS full

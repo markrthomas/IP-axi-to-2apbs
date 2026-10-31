@@ -205,6 +205,9 @@ help:
 	@echo "    UVM_IMAGE=name:tag  DOCKER=podman  RAILWAY=railway"
 	@echo ""
 	@echo "  Other: make lint | make clean | make check-full"
+	@echo "  swarm      Swarm A (verification) via Claude Code; swarm-rr = Swarm B (random regression); swarm-dry = show the command"
+	@echo "  batch      the Railway batch (docker/entrypoint.sh ci); board = swarm status; heavy T=<t> = one heavy target at a time"
+	@echo "  swarm-profile / swarm-kit-check   print .claude/swarm.env / check kit drift (shared kit: markrthomas/dv-swarm-kit)"
 
 # --- tests -------------------------------------------------------------------
 
@@ -777,3 +780,6 @@ clean:
 # Standard DV target (DV_STANDARDS.md): stress = randomized burst stress sim
 .PHONY: stress
 stress: test-stress
+
+# shared swarm/infra targets (markrthomas/dv-swarm-kit)
+include swarm.mk
