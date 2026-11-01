@@ -54,3 +54,5 @@ package-lock.json
 
 # make wave run log
 waves_stress.log
+/test/random/runs/
+/docker/last-run-metrics.json
