@@ -86,6 +86,8 @@ jobs:
 
       - name: Install OSS CAD Suite (SymbiYosys + solvers)
         uses: YosysHQ/setup-oss-cad-suite@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}   # authenticated release lookup: avoids the shared-IP API rate limit
 
       - name: Formal verification — simple bridge (depth 30) + burst bridge (depth 50)
         working-directory: verification/formal
