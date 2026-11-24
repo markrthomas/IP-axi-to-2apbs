@@ -92,3 +92,20 @@ jobs:
       - name: Formal verification — simple bridge (depth 30) + burst bridge (depth 50)
         working-directory: verification/formal
         run: make all
+
+  synth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Modern Yosys via OSS CAD Suite (apt's yosys has different generic cell naming,
+      # which broke the flop-count parse; matches the suite used by the other jobs).
+      - name: Setup OSS CAD Suite (yosys) — retry transient download flakes
+        uses: Wandalen/wretry.action@v3
+        with:
+          action: YosysHQ/setup-oss-cad-suite@v3
+          with: |
+            github-token: ${{ github.token }}
+          attempt_limit: 3
+          attempt_delay: 15000
+      - name: T1 synthesizability gate (latch-free, both bridge tops)
+        run: make syn
