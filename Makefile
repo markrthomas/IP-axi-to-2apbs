@@ -530,6 +530,16 @@ _lint_verilator:
 regress: _lint_iverilog _lint_verilator test-all
 	@echo "[REGRESS] lint + directed sim PASSED"
 
+# syn: T1 synthesizability gate (Yosys, OSS pathfinder — no PDK needed).
+#      Synthesizes both bridge tops to generic gates and asserts the design is
+#      latch-free; writes a cell/flop inventory to syn/reports/. Timing/STA/PPA
+#      are collateral (syn/constraints, syn/sta) that run where a PDK exists.
+#      Part of the tapeout-readiness program — see syn/SIGNOFF.md.
+.PHONY: syn
+syn:
+	@command -v yosys >/dev/null 2>&1 || { echo "[SYN] yosys not on PATH — skipping"; exit 0; }
+	@bash $(CURDIR)/syn/synth.sh
+
 COV_REPORT_HTML ?= coverage_report.html
 
 # Performance benchmark (optimized Verilator model of the burst bridge).
