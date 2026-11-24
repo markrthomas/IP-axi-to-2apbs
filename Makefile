@@ -540,6 +540,20 @@ syn:
 	@command -v yosys >/dev/null 2>&1 || { echo "[SYN] yosys not on PATH — skipping"; exit 0; }
 	@bash $(CURDIR)/syn/synth.sh
 
+# T4 DFT scan-readiness audit (OSS pathfinder, Yosys): latch-free + no comb loops +
+# scan-planning inventory. Scan insertion + ATPG are needs-license (syn/dft/DFT_PLAN.md).
+.PHONY: dft
+dft:
+	@command -v yosys >/dev/null 2>&1 || { echo "[DFT] yosys not on PATH — skipping"; exit 0; }
+	@bash $(CURDIR)/syn/dft/scan_readiness.sh
+
+# T3 low-power UPF consistency lint (OSS pathfinder, tclsh). Power-aware sim / LEC are
+# needs-license (VCS -upf; syn/lp/LP_PLAN.md).
+.PHONY: lp
+lp:
+	@command -v tclsh >/dev/null 2>&1 || { echo "[LP] tclsh not on PATH — skipping"; exit 0; }
+	@tclsh $(CURDIR)/syn/lp/upf_lint.tcl $(CURDIR)/syn/lp/axi_apb.upf
+
 COV_REPORT_HTML ?= coverage_report.html
 
 # Performance benchmark (optimized Verilator model of the burst bridge).

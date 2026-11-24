@@ -1,0 +1,91 @@
+# axi_apb.upf — IEEE-1801 (UPF) power intent for the AXI4 -> 2x APB4 bridge.
+#
+# Tapeout-readiness program T3 (../../DESIGN_READINESS.md). This block is the flow
+# pathfinder, so this UPF is also the sign-off kit's low-power TEMPLATE: a clean
+# two-domain pattern (always-on control + switchable datapath) with isolation,
+# retention and a header power switch.
+#
+# Authored collateral — the real run is VCS `-upf` + RTL<->UPF LEC (needs-license);
+# see LP_PLAN.md. A tool-free consistency lint runs here via `make lp`.
+#
+# NOTE: `-elements` instance paths below are the intended mapping; confirm them against
+# the synthesized hierarchy before the licensed run (the lint checks UPF *consistency*,
+# not element existence). Written for top `axi4_to_apb4_2x_simple`; the burst variant is
+# structurally identical (same domain split).
+
+set_design_top axi4_to_apb4_2x_simple
+
+##############################################################################
+# Power domains
+#   PD_AON : always-on. The AXI4 slave interface + command decode/arbitration —
+#            must stay powered to accept the access that wakes the datapath.
+#   PD_APB : switchable. The two APB master port engines + example regblock —
+#            power-gated when the bridge is idle (no outstanding transaction).
+##############################################################################
+create_power_domain PD_AON -elements {.}
+create_power_domain PD_APB -elements {u_apb_mux u_apb_p0 u_apb_p1 u_regblock}
+
+##############################################################################
+# Supply network
+##############################################################################
+create_supply_port  VDD   -domain PD_AON
+create_supply_port  VSS   -domain PD_AON
+create_supply_net   VDD   -domain PD_AON
+create_supply_net   VSS   -domain PD_AON
+create_supply_net   VDD_SW -domain PD_APB          ;# switched rail for PD_APB
+
+# Always-on domain is tied to the permanent rails.
+set_domain_supply_net PD_AON -primary_power_net VDD    -primary_ground_net VSS
+# Switchable domain runs from the switched rail (ground is common).
+set_domain_supply_net PD_APB -primary_power_net VDD_SW -primary_ground_net VSS
+
+##############################################################################
+# Header power switch for PD_APB (VDD -> VDD_SW), controlled by pmu_apb_pwr_en.
+##############################################################################
+create_power_switch apb_hdr_sw \
+    -domain        PD_APB \
+    -input_supply_port  {vin  VDD} \
+    -output_supply_port {vout VDD_SW} \
+    -control_port  {sw_en pmu_apb_pwr_en} \
+    -on_state      {on vin {sw_en}} \
+    -off_state     {off {!sw_en}}
+
+##############################################################################
+# Isolation: clamp PD_APB outputs that cross into PD_AON while PD_APB is off,
+# so the always-on control never samples floating values.
+##############################################################################
+set_isolation apb_iso \
+    -domain          PD_APB \
+    -isolation_power_net VDD \
+    -isolation_ground_net VSS \
+    -clamp_value     0 \
+    -applies_to      outputs
+set_isolation_control apb_iso \
+    -domain   PD_APB \
+    -isolation_signal pmu_apb_iso_en \
+    -isolation_sense  high \
+    -location parent
+
+##############################################################################
+# Retention: keep the APB-side configuration/status state across a power cycle
+# so the datapath resumes without a full reconfigure.
+##############################################################################
+set_retention apb_ret \
+    -domain      PD_APB \
+    -retention_power_net VDD \
+    -retention_ground_net VSS
+set_retention_control apb_ret \
+    -domain      PD_APB \
+    -save_signal    {pmu_apb_save high} \
+    -restore_signal {pmu_apb_restore high}
+
+##############################################################################
+# Power states (PST): the legal supply combinations and the P0/P1/P2 modes.
+#   P0 run       : both rails on.
+#   P1 iso       : PD_APB isolated, still powered (drain/clean handoff).
+#   P2 shutoff   : PD_APB rail off, state retained.
+##############################################################################
+create_pst bridge_pst -supplies {VDD VDD_SW}
+add_pst_state P0_run     -pst bridge_pst -state {ON  ON}
+add_pst_state P1_iso     -pst bridge_pst -state {ON  ON}
+add_pst_state P2_shutoff -pst bridge_pst -state {ON  OFF}

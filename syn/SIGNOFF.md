@@ -15,8 +15,8 @@ authored here and run where the tools/PDK exist.
 | **T0** spec freeze | ☐ open | `doc/design_contract.md` | Freeze AXI profile + both APB4 maps + param set; cite AMBA AXI/APB. |
 | **T1** synthesizable | ◐ **pathfind PASS** | `syn/reports/*.stat.txt`, `make syn` | Yosys generic synth, latch-free asserted. Liberty-mapped synth = `needs-pdk`. |
 | **T2** STA | ◐ collateral | `syn/constraints/axi_apb.sdc`, `syn/sta/opensta.tcl` | SDC authored (single clock, async-reset false path, I/O budgets). Run = `needs-pdk` (OpenSTA/PrimeTime + liberty). |
-| **T3** low-power | ☐ open | `lp/` (to author) | Small/none — APB peripheral gating if any. Good first UPF template for the kit. `needs-license` to validate. |
-| **T4** DFT | ☐ open | `dft/` (to author) | Scan + ATPG; template DFT run for the kit. `needs-license`. |
+| **T3** low-power | ◐ authored + OSS-lint | `make lp` → `syn/lp/upf_lint.tcl`; `syn/lp/axi_apb.upf`, `syn/lp/LP_PLAN.md` | IEEE-1801 UPF: PD_AON (always-on control) + switchable PD_APB (datapath), header switch + isolation + retention + P0/P1/P2 PST. Consistency lint PASS (2 domains/3 supplies/iso/ret/3 states). This is the kit's low-power template. Power-aware sim (VCS `-upf`) + RTL↔UPF LEC = `needs-license`. |
+| **T4** DFT | ◐ **PASS** (scan-ready) | `make dft` → `syn/dft/reports/<top>.scan.rpt`; `syn/dft/DFT_PLAN.md` | OSS scan-readiness audit: latch-free + no combinational loops (hard), flop/scan-chain inventory (simple 415, burst 445), reset-controllability, async set/reset, 0 RAMs (no MBIST). Single-clock (ACLK) → one scan clock. This is the kit's template DFT run. Scan insertion + ATPG (DFT Compiler/TestMAX) = `needs-license`. |
 | **T5** verif sign-off | ◑ strong | UVM-on-Verilator green in CI; 100% line cov; formal safety+liveness | Promote UVM to a licensed sim; document coverage model + exclusions (`doc/coverage_notes.md`). `needs-license` for the sign-off run. |
 | **T6** GLS + PPA | ☐ open | — | GLS on pathfinder netlist + PPA baseline; `needs-pdk` for target-node PPA. |
 | **T7** integration/pkg | ☐ open | `pkg/` (to author) | IP-XACT + register map + RAL + integration guide; becomes the kit's packaging template. |
