@@ -109,3 +109,17 @@ jobs:
           attempt_delay: 15000
       - name: T1 synthesizability gate (latch-free, both bridge tops)
         run: make syn
+
+      - name: T4 DFT scan-readiness audit (latch-free + no comb loops + inventory)
+        run: make dft
+
+      - name: T3 low-power UPF consistency lint
+        run: make lp
+
+      - name: Upload sign-off reports (synth / scan)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signoff-reports
+          path: syn/**/reports/
+          if-no-files-found: ignore
