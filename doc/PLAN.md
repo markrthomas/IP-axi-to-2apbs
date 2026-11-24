@@ -248,3 +248,48 @@ the cocotb test provides a complementary lightweight directed proof.
 - Update **Current baseline** when a milestone lands.
 - Convert near-term items to GitHub issues with acceptance criteria before starting.
 - `make md-pdfs` rebuilds this and all other `doc/*.md` files as PDFs.
+
+---
+
+## Tapeout readiness (design sign-off)
+
+> Part of the workspace program in [`../../DESIGN_READINESS.md`](../../DESIGN_READINESS.md).
+> Gate pass criteria + tooling/PDK reality live there. Tags: **[oss-pathfind]**,
+> **[needs-license]**, **[needs-pdk]**.
+
+### Role in the program: the **flow pathfinder**
+This is the smallest, cleanest, most complete of the five blocks (100% Verilator line coverage,
+UVM-on-Verilator green in CI, formal safety+liveness, cocotb, container flow). The program uses
+it to **stand up the shared sign-off kit first** (`syn/ sta/ dft/ lp/ pkg/`) on the open PDK, prove
+the flow, then roll it onto the harder blocks. AXI4/APB4 are public → repo stays **public**.
+First thing to confirm: whether AXI and the two APB4 buses share one clock (likely single clock
+domain → **T1 CDC is n/a/simple**, which is exactly why this is the cheapest pathfinder); document
+the result in the reset/clock architecture note.
+
+### Design-completion items (from this plan's long-term, optional for a first tapeout)
+AXI4 QoS/ID tagging, APB3 compatibility mode, and the dual-slave stress hardening can be scoped
+in or out of the first sign-off; the bridge is tapeout-viable without them if the config is frozen.
+
+### T-gate map
+- **T0 Spec freeze** — freeze the AXI profile (AXI3-Lite regblock + AXI4 burst variants), the two
+  APB4 slave maps, and the parameter set; `doc/design_contract.md` is the basis — cite AMBA AXI/APB.
+- **T1 Synth [oss-pathfind, then needs-pdk]** — **pathfind on sky130/gf180 via OpenLane** (real
+  GDS for a block this size is achievable here); then port to the target library. Confirm no
+  inferred latches; regblock memory strategy (flop array).
+- **T2 STA [oss-pathfind]** — OpenSTA on the pathfinder; SDC (single clock if confirmed, else
+  AXI↔APB CDC exceptions), APB wait-state paths; then PrimeTime on the real library.
+- **T3 Low-power [needs-license]** — author UPF (APB peripheral clock-gating / power domains if any);
+  validate on licensed sim; LEC. Likely a **small** UPF — good first UPF to template the kit.
+- **T4 DFT [needs-license]** — scan insertion + ATPG; this is the template DFT run for the kit.
+- **T5 Verif sign-off [needs-license]** — already closest: promote the **UVM env to a licensed
+  sim** run, keep the UVM-on-Verilator gate, document the coverage model + exclusions
+  (`doc/coverage_notes.md`), sign off.
+- **T6 GLS + PPA [oss-pathfind, then needs-pdk]** — GLS on the pathfinder netlist; PPA baseline.
+- **T7 Integration/pkg** — IP-XACT; regblock register map + RAL; integration guide; tagged release.
+  This block's packaging becomes the **template** the kit applies to the others.
+
+### Ordered milestones
+1. Stand up the shared `syn/sta/dft/lp/pkg` kit here on the open PDK — **do first; it unblocks the
+   whole program.** 2. T0 freeze (config + maps). 3. Full OpenLane GDS pathfind (T1/T2/T6).
+4. T5 UVM-on-licensed-sim + coverage sign-off. 5. T3/T4 as the kit templates. 6. Port to target
+   library + PPA. 7. T7 package + tag (template for #5/#4/#2/#1).
