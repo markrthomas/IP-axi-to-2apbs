@@ -37,11 +37,11 @@ for TOP in "${TOPS[@]}"; do
       read_verilog -sv $rd
       hierarchy -check -top $TOP
       proc; opt -full
-      select -assert-none t:\$dlatch t:\$_DLATCH_??
+      select -assert-none t:\$dlatch t:\$_DLATCH_*
       synth -top $TOP -flatten
       tee -o $RPT/$TOP.stat.txt stat
   "; then
-    dff=$(grep -oE '[0-9]+ +\$_DFF[A-Z0-9_]*' "$RPT/$TOP.stat.txt" | awk '{s+=$1} END{print s+0}')
+    dff=$( (grep -oE '[0-9]+ +\$_DFF[A-Z0-9_]*' "$RPT/$TOP.stat.txt" || true) | awk '{s+=$1} END{print s+0}')
     echo "[SYN] $TOP: PASS — latch-free, flops=$dff (report: syn/reports/$TOP.stat.txt)"
   else
     echo "[SYN] $TOP: FAIL — see syn/reports/$TOP.synth.log (latch inferred or elaboration error)"
