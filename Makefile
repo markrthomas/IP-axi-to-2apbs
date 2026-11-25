@@ -554,6 +554,21 @@ lp:
 	@command -v tclsh >/dev/null 2>&1 || { echo "[LP] tclsh not on PATH — skipping"; exit 0; }
 	@tclsh $(CURDIR)/syn/lp/upf_lint.tcl $(CURDIR)/syn/lp/axi_apb.upf
 
+# T6 GLS (OSS pathfinder, Yosys + Icarus): zero-delay gate-level sim of the synthesized
+# netlist against the self-checking directed TBs. SDF-timing GLS + real PPA are needs-pdk
+# (syn/gls/T6_PLAN.md).
+.PHONY: gls
+gls:
+	@command -v yosys >/dev/null 2>&1 || { echo "[GLS] yosys not on PATH — skipping"; exit 0; }
+	@bash $(CURDIR)/syn/gls/gls.sh
+
+# T6 PPA proxy baseline (OSS, technology-independent): generic cell/flop count + logic
+# depth. Real node PPA (ns/mW/um^2) is needs-pdk (syn/ppa/PPA_PLAN.md).
+.PHONY: ppa
+ppa:
+	@command -v yosys >/dev/null 2>&1 || { echo "[PPA] yosys not on PATH — skipping"; exit 0; }
+	@bash $(CURDIR)/syn/ppa/ppa.sh
+
 COV_REPORT_HTML ?= coverage_report.html
 
 # Performance benchmark (optimized Verilator model of the burst bridge).
