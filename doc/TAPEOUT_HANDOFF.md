@@ -52,7 +52,7 @@ the CI run.
 
 | Gate | Status | Reproduce | Artifact (generated = CI `signoff-reports`; committed = in git) |
 |------|--------|-----------|--------------------|
-| **T0** spec freeze | ☐ open | — | `doc/design_contract.md` is the basis; not yet frozen/tagged |
+| **T0** spec freeze | ◐ freeze candidate `1.0-rc1` | — (review) | committed: `doc/design_contract.md` §T0; 4 owner decisions open (O1–O4) |
 | **T1** synth | ◐ pathfind PASS | `make syn` | generated: `syn/reports/*.stat.txt` (latch-free) |
 | **T2** STA | ◐ collateral | — (needs-pdk) | committed: `syn/constraints/axi_apb.sdc`, `syn/sta/opensta.tcl` |
 | **T3** low-power | ◐ authored + OSS-lint | `make lp` | committed: `syn/lp/axi_apb.upf`, `syn/lp/LP_PLAN.md`; lint PASS in CI log |
@@ -100,11 +100,13 @@ go-ahead (see §5); this section is the map of *what* remains, not a licence to 
 
 Ordered; the first item is the only one with no external dependency.
 
-1. **T0 — freeze the spec.** Freeze the AXI profile (AXI3-Lite regblock + AXI4 burst
-   variants), both APB4 slave maps, and the parameter set, with each decision traced to
-   a cited AMBA AXI/APB clause. Basis: `doc/design_contract.md`. Deliverable: a frozen
-   contract + a version tag. **This is doable now, here, with no license/PDK** — it is
-   the highest-value next step for #3 and the one that unblocks a clean T7 release tag.
+1. **T0 — freeze the spec.** *Freeze candidate `1.0-rc1` is written*
+   (`doc/design_contract.md` §T0: decisions D1–D17 with IHI0022E/IHI0024C clause traces,
+   the frozen parameter set, integration requirements R1–R6). **Remaining:** the owner
+   decides O1–O4 (§T0.4). Each is a DUT behaviour change, so do not merge a fix without
+   that go-ahead. Then: add a fail-before/pass-after directed test per fix, have the owner
+   check the clause numbers, bump to `1.0` and tag `contract-v1.0`. This unblocks a clean
+   T7 release tag.
 2. **T2/T6 silicon run `[needs-pdk]`.** Take the block through OpenLane/OpenROAD on an
    open PDK (sky130/gf180 — viable for a block this small) for a real GDS, then port to
    the target library: Liberty-mapped synth, SDF-annotated (timing) GLS, OpenSTA/PrimeTime

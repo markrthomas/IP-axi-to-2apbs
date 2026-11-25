@@ -21,7 +21,7 @@ Reports under `syn/**/reports/` are generated and **gitignored**. CI uploads the
 
 | Gate | Status | Artifact / where | Notes |
 |------|--------|------------------|-------|
-| **T0** spec freeze | ☐ open | `doc/design_contract.md` | Freeze AXI profile + both APB4 maps + param set; cite AMBA AXI/APB. |
+| **T0** spec freeze | ◐ **freeze candidate** (`1.0-rc1`) | `doc/design_contract.md` §T0 | Profile, APB0/APB1 map and parameter set frozen as decisions D1–D17, each traced to [AXI] IHI0022E / [APB] IHI0024C clauses. **Blocked on 4 owner decisions** (§T0.4: O1 AW/AR deadlock, O2 `PSTRB` on reads, O3 simple multi-beat `DECERR` leaves W beats behind, O4 unaligned addresses). Tag `contract-v1.0` once they're closed and the clause numbers are owner-checked. |
 | **T1** synthesizable | ◐ **pathfind PASS** | `syn/reports/*.stat.txt`, `make syn` | Yosys generic synth, latch-free asserted. Liberty-mapped synth = `needs-pdk`. |
 | **T2** STA | ◐ collateral | `syn/constraints/axi_apb.sdc`, `syn/sta/opensta.tcl` | SDC authored (single clock, async-reset false path, I/O budgets). Run = `needs-pdk` (OpenSTA/PrimeTime + liberty). |
 | **T3** low-power | ◐ authored + OSS-lint | `make lp` → `syn/lp/upf_lint.tcl`; `syn/lp/axi_apb.upf`, `syn/lp/LP_PLAN.md` | IEEE-1801 UPF: PD_AON (always-on control) + switchable PD_APB (datapath), header switch + isolation + retention + P0/P1/P2 PST. Consistency lint PASS (2 domains/3 supplies/iso/ret/3 states). This is the kit's low-power template. Power-aware sim (VCS `-upf`) + RTL↔UPF LEC = `needs-license`. |

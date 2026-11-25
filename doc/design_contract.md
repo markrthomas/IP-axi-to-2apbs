@@ -1,8 +1,108 @@
 # AXI4 to 2x APB4 Bridge Design Contract
 
+| | |
+|---|---|
+| **Contract version** | `1.0-rc1` (T0 **freeze candidate**, 2026-11-25) |
+| **Status** | Not frozen. Four owner decisions are open ([§T0.4](#t04-open-decisions-owner)); T0 is tagged `contract-v1.0` only after they are resolved. |
+| **Applies to RTL** | `src/axi4_to_apb4_2x_simple.v`, `src/axi4_to_apb4_2x_burst.v` at `main` `e6aca15`; `src/axi3lite_regblock.v` (example slave, [§T0.3](#t03-example-slave-axi3lite_regblock)) |
+
 This document defines the target behavior for the fully functional bridge.
 It is the reference contract for RTL cleanup, verification, and integration
-documentation.
+documentation. The T0 sections below freeze the profile; the sections after them
+(Scope onward) are the detailed behavioural contract and are part of the freeze.
+
+## T0. Spec freeze
+
+### T0.1 Normative references
+
+| Ref | Document | Issue used for clause numbers |
+|-----|----------|-------------------------------|
+| **[AXI]** | AMBA AXI and ACE Protocol Specification, ARM IHI 0022 | **E** (AXI3/AXI4/AXI4-Lite) |
+| **[APB]** | AMBA APB Protocol Specification, ARM IHI 0024 | **C** (APB v2.0 = APB4) |
+
+Clause numbers below follow those issues. Later AXI issues renumber and, from Issue J,
+drop AXI3/AXI4 content, so keep citations pinned to Issue E. **Sign-off check:** the
+owner confirms every clause number against his own copy before the `contract-v1.0` tag.
+
+### T0.2 Frozen decisions
+
+Each row is the behaviour of the RTL at the version above, traced to the spec clause it
+implements or deliberately restricts. "Restriction" means the bridge supports less than
+the spec allows; the integrator must respect it ([§T0.5](#t05-integration-requirements)).
+
+| ID | Decision | simple | burst | Spec trace |
+|----|----------|:------:|:-----:|-----------|
+| D1 | AXI4 subordinate, 32-bit address, 64-bit data | ✓ | ✓ | [AXI] A2 signal lists; restriction to one width |
+| D2 | Ports present: AW/W/B/AR/R with `ID`, `ADDR`, `LEN`, `SIZE`, `BURST`, `PROT`, `DATA`, `STRB`, `LAST`, `RESP` + handshakes (53 ports incl. APB). **Absent:** `AxLOCK`, `AxCACHE`, `AxQOS`, `AxREGION`, `xUSER`. No exclusive access, so never `EXOKAY` | ✓ | ✓ | [AXI] A2; A7 (exclusive access is optional for a subordinate) |
+| D3 | One transaction in flight. A new AW/AR is accepted only when idle, with no response pending | ✓ | ✓ | [AXI] A3.2.1 (subordinate may hold `READY` low) |
+| D4 | Transfer size: `AxSIZE` must equal the bus width (`3'b011`); narrow transfers → `DECERR` | ✓ | ✓ | [AXI] A3.4.1 burst size; restriction |
+| D5 | Burst length: simple supports `AxLEN == 0` only (else `DECERR`); burst supports `AxLEN` 0–255 (1–256 beats) | ✓ | ✓ | [AXI] A3.4.1 burst length |
+| D6 | Burst type: burst supports `FIXED` + `INCR`; `WRAP` and reserved → `DECERR`. Simple ignores `AxBURST` (single beat) | — | ✓ | [AXI] A3.4.1 burst type; restriction |
+| D7 | `FIXED` length is not range-checked. The spec limits `FIXED` to 16 beats; the burst top accepts up to 256 (tolerant, not an error) | — | ✓ | [AXI] A3.4.1 (FIXED/WRAP ≤ 16) |
+| D8 | `INCR` address step = `1 << AxSIZE` = 8 bytes; `FIXED` keeps the address | — | ✓ | [AXI] A3.4.1 burst address |
+| D9 | APB port select = `addr[31]` (`APB_ADDR_BIT = 31`): APB0 = `0x0000_0000`–`0x7FFF_FFFF`, APB1 = `0x8000_0000`–`0xFFFF_FFFF`. An `INCR` burst whose last-beat address flips bit 31 → `DECERR` | ✓ | ✓ | Design decision (no AXI clause). Note: a compliant master never crosses a 4 KB boundary ([AXI] A3.4.1), so the crossing check only fires for a non-compliant master. It still guards against one |
+| D10 | `WSTRB` → `PSTRB` per beat, unchanged | ✓ | ✓ | [AXI] A3.4.3 write strobes; [APB] 3.2 |
+| D11 | `AxPROT` → `PPROT` unchanged | ✓ | ✓ | [AXI] A4.7; [APB] 3.5 |
+| D12 | `PSLVERR` → `SLVERR`. Write: one `BRESP` for the burst, `SLVERR` if any beat erred. Read: per-beat `RRESP` | ✓ | ✓ | [APB] 3.4, 3.4.3 (mapping to AXI); [AXI] A3.4.4 |
+| D13 | Unsupported parameters and window crossing → `DECERR`. A decode-error read returns `AxLEN + 1` beats of `DECERR`, `RDATA = 0`, correct `RLAST` | ✓ | ✓ | [AXI] A3.4.4. `DECERR` is normally an interconnect response; using it for unsupported parameters is the existing design choice, and the TBs check for it. Switching to `SLVERR` would be an owner decision |
+| D14 | Malformed `WLAST` (early or missing) → `SLVERR`, and the write-data phase ends on `WLAST` or on beat `AWLEN + 1`, whichever comes first. `DECERR` outranks `SLVERR` | — | ✓ | [AXI] A3.4.1 (write data count must match `AWLEN`); robustness beyond spec |
+| D15 | APB4 transfers: SETUP then ACCESS; completes on `PREADY`; `PADDR/PPROT/PWRITE/PWDATA/PSTRB` stable through wait states; only one `PSEL` ever asserted | ✓ | ✓ | [APB] 3.1, 3.3, 4.1 |
+| D16 | Response signals held stable while `xVALID && !xREADY`; `BID`/`RID` = accepted `AxID` | ✓ | ✓ | [AXI] A3.2.1; A5 (ID) |
+| D17 | Single clock `ACLK`, active-low async-assert `ARESETn`; all `VALID` outputs low in reset | ✓ | ✓ | [AXI] A3.1.2 reset |
+
+**Frozen parameter set** (the only configuration covered by verification and sign-off):
+
+| Parameter | Frozen value | Notes |
+|-----------|-------------|-------|
+| `ADDR_WIDTH` | 32 | |
+| `DATA_WIDTH` | 64 | `EXPECTED_AXSIZE` is derived from it; other widths are unverified |
+| `ID_WIDTH` | 4 | Pass-through only, so other widths ≥ 1 are expected to work, but every TB (incl. `tb_parameterized_config`) uses 4: other widths are **unverified** |
+| `APB_ADDR_BIT` | 31 | The RTL exposes it as a parameter, but other values are unverified and unsupported |
+
+### T0.3 Example slave: `axi3lite_regblock`
+
+The regblock is a test/demo slave, **not** a deliverable IP top, and is not in the T1–T7
+sign-off. It is frozen only so its tests have a stable reference:
+
+- "AXI3-Lite" is a **repo-defined profile, not an ARM-defined one**: AXI4-Lite signalling
+  ([AXI] B1) plus AXI3 IDs and `WID` (which must equal `AWID`, else `SLVERR`).
+- 32 × 32-bit RW registers at byte offsets `0x00`–`0x7C`; out-of-range → `SLVERR`;
+  `WSTRB` byte enables; all registers reset to 0. `DATA_WIDTH = 32` only (the strobe
+  logic is hard-coded to 4 lanes).
+- Synchronous reset (the bridge tops use asynchronous reset).
+
+### T0.4 Open decisions (owner)
+
+Code review for this freeze found four behaviours where the RTL does not do what a
+compliant AXI master or APB4 completer expects. Each is a **DUT behaviour change**, so
+each is the owner's call. None was reproduced in simulation for this review (no
+simulator was available); the evidence is the RTL lines cited plus, for O1, the
+formal assumptions. Any RTL fix needs a directed test that fails before the fix and passes after.
+
+| ID | Finding | Evidence | Spec | Options |
+|----|---------|----------|------|---------|
+| **O1** | **AW/AR deadlock.** If `AWVALID` and `ARVALID` are both high, neither `AWREADY` nor `ARREADY` asserts. A compliant master must keep `VALID` high until the handshake, so it waits forever. In simple, `WVALID` + `ARVALID` with no AW also deadlocks | burst `src/…_burst.v:127-128`; simple `src/…_simple.v:111-113`. Formal hides it: `apb4_burst_props.sv:145`, `apb4_simple_props.sv:180-185` `assume (!(AWVALID && ARVALID))`, with the comment "presenting both simultaneously deadlocks". Formal liveness therefore holds **only under that assumption** | [AXI] A3.2.1 (VALID held until handshake); A3.3 (no AW↔AR dependency) | (a) **Recommended:** fixed priority, write wins: `AWREADY = idle`, `ARREADY = idle && !AWVALID` (simple: also don't gate `WREADY` on `ARVALID`); drop the formal assumption. (b) Keep it and freeze it as an integration requirement (§T0.5 R1) |
+| **O2** | **`PSTRB` not driven low on reads.** On an APB read, `PSTRBx` keeps the strobes of the previous write | read setup assigns `PADDR/PPROT/PWRITE/PSEL` but not `PSTRB`: burst `src/…_burst.v:242, :244`; simple `src/…_simple.v:156, :158` | [APB] 2.1 Table 2-1 and 3.2: "For read transfers the bus master must drive all bits of PSTRB LOW" | (a) **Recommended:** `PSTRBx <= 0` at read setup, and add a monitor/formal check. (b) Freeze it as a known deviation (an APB4 completer that uses `PSTRB` without `PWRITE` would misbehave) |
+| **O3** | **simple: multi-beat write decode error leaves W beats behind.** With `AWLEN != 0`, simple returns `DECERR` after accepting **one** W beat. The master still has `AWLEN` beats to send; simple then accepts them as `w_pending` and pairs the first one with the **next** AW. That writes stale data to the next address | `src/…_simple.v:130-131` (DECERR on `AWLEN != 0`), `:134-135` (W capture in IDLE), `:179-181` (`ST_ERR_RESP` responds after one W beat) | [AXI] A3.4.1: the master sends `AWLEN + 1` beats and the subordinate must accept them all | (a) **Recommended:** in `ST_ERR_RESP`, sink W beats until `WLAST`, then respond (as the burst top does, D14). (b) Freeze "simple must only see `AxLEN == 0`" as an integration requirement (§T0.5 R2); a violation corrupts the next write |
+| **O4** | **Unaligned start address.** Neither top checks `AxADDR[2:0]`. An unaligned address goes to `PADDR` unchanged, and burst `INCR` steps the unaligned address by 8, where AXI aligns beats after the first | burst `:110, :207`; no alignment check in `aw_param_err`/`ar_param_err` (`:120-121`) | [AXI] A3.4.1 burst address (aligned beats after the first) | (a) `DECERR` on `AxADDR[2:0] != 0`. (b) **Recommended (no RTL change):** freeze "addresses must be 8-byte aligned" as an integration requirement (§T0.5 R3); APB peripherals are normally word-addressed anyway |
+
+When a decision is made: update the row (mark it resolved and give the PR), fix the
+RTL or §T0.5 accordingly, add the directed test, and move the item to §T0.2. Once O1–O4
+are closed, set the version to `1.0` and tag `contract-v1.0`.
+
+### T0.5 Integration requirements
+
+These are frozen as integration requirements for `1.0-rc1`. Resolving an open decision
+the recommended way removes the matching item.
+
+- **R1** (pending O1): the master/interconnect must not present `AWVALID` and `ARVALID`
+  in the same cycle (for simple: `ARVALID` together with `AWVALID` or `WVALID`). Typical
+  fix at integration: an AXI read/write arbiter or a single-port shim in front of the bridge.
+- **R2** (pending O3): simple must only receive `AxLEN == 0`.
+- **R3** (pending O4): all AXI addresses must be 8-byte aligned (`AxADDR[2:0] == 0`).
+- **R4**: bursts must not cross the APB window (`addr[31]`); a crossing gets `DECERR`, not split.
+- **R5**: APB completers must not depend on `PSTRB` during reads until O2 is resolved.
+- **R6**: only the frozen parameter set (§T0.2) is supported.
 
 ## Scope
 
@@ -52,7 +152,8 @@ Supported write parameters:
 
 Unsupported write parameters cause a decode error response. The bridge must
 still handle the write data channel predictably so the AXI master is not left
-stalled mid-transaction.
+stalled mid-transaction. (The burst top meets this. The simple top does not for
+`AWLEN != 0`: open decision O3 in §T0.4.)
 
 ### Write Data Channel
 
@@ -177,10 +278,12 @@ The current target contract is intentionally fixed-width:
 - `DATA_WIDTH == 64`
 - `DATA_WIDTH / 8 == 8`
 
-`ID_WIDTH` may vary and must be preserved through responses.
+`ID_WIDTH` may vary and must be preserved through responses (only 4 is verified;
+see the frozen parameter set in §T0.2).
 
-Future parameterization may add a configurable APB select bit, address decode
-table, and data width. Until that work is implemented and tested, integrations
+`APB_ADDR_BIT` already exists as an RTL parameter but only 31 is verified or
+supported. Future parameterization may make the APB select bit, an address decode
+table, and the data width configurable. Until that work is implemented and tested, integrations
 should treat non-32-bit address or non-64-bit data configurations as
 unsupported.
 
