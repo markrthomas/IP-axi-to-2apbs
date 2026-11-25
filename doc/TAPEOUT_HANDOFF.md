@@ -52,7 +52,7 @@ the CI run.
 
 | Gate | Status | Reproduce | Artifact (generated = CI `signoff-reports`; committed = in git) |
 |------|--------|-----------|--------------------|
-| **T0** spec freeze | ◐ freeze candidate `1.0-rc1` | — (review) | committed: `doc/design_contract.md` §T0; 4 owner decisions open (O1–O4) |
+| **T0** spec freeze | ◐ freeze candidate `1.0-rc2` | `make test-compliance` | committed: `doc/design_contract.md` §T0; O1–O4 decided (fixes in #33); O5 open |
 | **T1** synth | ◐ pathfind PASS | `make syn` | generated: `syn/reports/*.stat.txt` (latch-free) |
 | **T2** STA | ◐ collateral | — (needs-pdk) | committed: `syn/constraints/axi_apb.sdc`, `syn/sta/opensta.tcl` |
 | **T3** low-power | ◐ authored + OSS-lint | `make lp` | committed: `syn/lp/axi_apb.upf`, `syn/lp/LP_PLAN.md`; lint PASS in CI log |
@@ -100,13 +100,13 @@ go-ahead (see §5); this section is the map of *what* remains, not a licence to 
 
 Ordered; the first item is the only one with no external dependency.
 
-1. **T0 — freeze the spec.** *Freeze candidate `1.0-rc1` is written*
-   (`doc/design_contract.md` §T0: decisions D1–D17 with IHI0022E/IHI0024C clause traces,
-   the frozen parameter set, integration requirements R1–R6). **Remaining:** the owner
-   decides O1–O4 (§T0.4). Each is a DUT behaviour change, so do not merge a fix without
-   that go-ahead. Then: add a fail-before/pass-after directed test per fix, have the owner
-   check the clause numbers, bump to `1.0` and tag `contract-v1.0`. This unblocks a clean
-   T7 release tag.
+1. **T0 — freeze the spec.** *Freeze candidate `1.0-rc2`* (`doc/design_contract.md`
+   §T0: decisions D1–D21 with IHI0022E/IHI0024C clause traces, frozen parameter set,
+   integration requirements). O1–O4 are decided; O1–O3 are fixed in #33 with compliance
+   TBs (`make test-compliance`) that fail before and pass after. **Remaining:** the owner
+   decides **O5** (a DUT behaviour change, so do not merge a fix without that go-ahead),
+   #33 merges, the owner checks the clause numbers, then bump to `1.0` and tag
+   `contract-v1.0`. This unblocks a clean T7 release tag.
 2. **T2/T6 silicon run `[needs-pdk]`.** Take the block through OpenLane/OpenROAD on an
    open PDK (sky130/gf180 — viable for a block this small) for a real GDS, then port to
    the target library: Liberty-mapped synth, SDF-annotated (timing) GLS, OpenSTA/PrimeTime

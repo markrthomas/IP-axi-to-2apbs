@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Contract version** | `1.0-rc1` (T0 **freeze candidate**, 2026-11-25) |
-| **Status** | Not frozen. Four owner decisions are open ([§T0.4](#t04-open-decisions-owner)); T0 is tagged `contract-v1.0` only after they are resolved. |
-| **Applies to RTL** | `src/axi4_to_apb4_2x_simple.v`, `src/axi4_to_apb4_2x_burst.v` at `main` `e6aca15`; `src/axi3lite_regblock.v` (example slave, [§T0.3](#t03-example-slave-axi3lite_regblock)) |
+| **Contract version** | `1.0-rc2` (T0 **freeze candidate**, 2026-11-25) |
+| **Status** | Not frozen. O1–O4 are decided (fixed in #33, or turned into an integration requirement); **O5 is open** ([§T0.4](#t04-open-decisions-owner)). T0 is tagged `contract-v1.0` once O5 is decided, #33 is merged and the clause numbers are owner-checked. |
+| **Applies to RTL** | `src/axi4_to_apb4_2x_simple.v`, `src/axi4_to_apb4_2x_burst.v` **with the #33 fixes** (O1–O3); `src/axi3lite_regblock.v` (example slave, [§T0.3](#t03-example-slave-axi3lite_regblock)) |
 
 This document defines the target behavior for the fully functional bridge.
 It is the reference contract for RTL cleanup, verification, and integration
@@ -44,11 +44,15 @@ the spec allows; the integrator must respect it ([§T0.5](#t05-integration-requi
 | D10 | `WSTRB` → `PSTRB` per beat, unchanged | ✓ | ✓ | [AXI] A3.4.3 write strobes; [APB] 3.2 |
 | D11 | `AxPROT` → `PPROT` unchanged | ✓ | ✓ | [AXI] A4.7; [APB] 3.5 |
 | D12 | `PSLVERR` → `SLVERR`. Write: one `BRESP` for the burst, `SLVERR` if any beat erred. Read: per-beat `RRESP` | ✓ | ✓ | [APB] 3.4, 3.4.3 (mapping to AXI); [AXI] A3.4.4 |
-| D13 | Unsupported parameters and window crossing → `DECERR`. A decode-error read returns `AxLEN + 1` beats of `DECERR`, `RDATA = 0`, correct `RLAST` | ✓ | ✓ | [AXI] A3.4.4. `DECERR` is normally an interconnect response; using it for unsupported parameters is the existing design choice, and the TBs check for it. Switching to `SLVERR` would be an owner decision |
+| D13 | Unsupported parameters and window crossing → `DECERR`. A decode-error read returns `AxLEN + 1` beats of `DECERR`, `RDATA = 0`, correct `RLAST` (simple: one beat only, see **O5**) | ◐ | ✓ | [AXI] A3.4.4. `DECERR` is normally an interconnect response; using it for unsupported parameters is the existing design choice, and the TBs check for it. Switching to `SLVERR` would be an owner decision |
 | D14 | Malformed `WLAST` (early or missing) → `SLVERR`, and the write-data phase ends on `WLAST` or on beat `AWLEN + 1`, whichever comes first. `DECERR` outranks `SLVERR` | — | ✓ | [AXI] A3.4.1 (write data count must match `AWLEN`); robustness beyond spec |
 | D15 | APB4 transfers: SETUP then ACCESS; completes on `PREADY`; `PADDR/PPROT/PWRITE/PWDATA/PSTRB` stable through wait states; only one `PSEL` ever asserted | ✓ | ✓ | [APB] 3.1, 3.3, 4.1 |
 | D16 | Response signals held stable while `xVALID && !xREADY`; `BID`/`RID` = accepted `AxID` | ✓ | ✓ | [AXI] A3.2.1; A5 (ID) |
 | D17 | Single clock `ACLK`, active-low async-assert `ARESETn`; all `VALID` outputs low in reset | ✓ | ✓ | [AXI] A3.1.2 reset |
+| D18 | AW vs AR arbitration: **fixed priority, write wins** (resolves O1). `AWREADY` (and simple's `WREADY`) never wait on `ARVALID`; `ARREADY` waits for `!AWVALID` (simple: also `!WVALID`). A continuous write stream can delay reads indefinitely (no starvation guard) | ✓ | ✓ | [AXI] A3.2.1, A3.3 |
+| D19 | `PSTRB` = 0 for the whole of every APB read (resolves O2) | ✓ | ✓ | [APB] 2.1 Table 2-1, 3.2 |
+| D20 | A `DECERR` write takes every W beat (until `WLAST` or `AWLEN + 1` beats) before `BVALID` (resolves O3 for simple; burst already did this, D14) | ✓ | ✓ | [AXI] A3.3.1 (B after last W), A3.4.1 |
+| D21 | Addresses are not alignment-checked; integrators must issue 8-byte-aligned addresses (resolves O4 as integration requirement R3) | ✓ | ✓ | [AXI] A3.4.1 burst address |
 
 **Frozen parameter set** (the only configuration covered by verification and sign-off):
 
@@ -73,36 +77,32 @@ sign-off. It is frozen only so its tests have a stable reference:
 
 ### T0.4 Open decisions (owner)
 
-Code review for this freeze found four behaviours where the RTL does not do what a
-compliant AXI master or APB4 completer expects. Each is a **DUT behaviour change**, so
-each is the owner's call. None was reproduced in simulation for this review (no
-simulator was available); the evidence is the RTL lines cited plus, for O1, the
-formal assumptions. Any RTL fix needs a directed test that fails before the fix and passes after.
+Code review for this freeze found five behaviours where the RTL does not do what a
+compliant AXI master or APB4 completer expects. Each is a DUT behaviour change and
+the owner's call. O1–O4 were decided on 2026-11-25 (recommended option in each case);
+O5 was found afterwards, while fixing O3, and is open.
 
-| ID | Finding | Evidence | Spec | Options |
-|----|---------|----------|------|---------|
-| **O1** | **AW/AR deadlock.** If `AWVALID` and `ARVALID` are both high, neither `AWREADY` nor `ARREADY` asserts. A compliant master must keep `VALID` high until the handshake, so it waits forever. In simple, `WVALID` + `ARVALID` with no AW also deadlocks | burst `src/…_burst.v:127-128`; simple `src/…_simple.v:111-113`. Formal hides it: `apb4_burst_props.sv:145`, `apb4_simple_props.sv:180-185` `assume (!(AWVALID && ARVALID))`, with the comment "presenting both simultaneously deadlocks". Formal liveness therefore holds **only under that assumption** | [AXI] A3.2.1 (VALID held until handshake); A3.3 (no AW↔AR dependency) | (a) **Recommended:** fixed priority, write wins: `AWREADY = idle`, `ARREADY = idle && !AWVALID` (simple: also don't gate `WREADY` on `ARVALID`); drop the formal assumption. (b) Keep it and freeze it as an integration requirement (§T0.5 R1) |
-| **O2** | **`PSTRB` not driven low on reads.** On an APB read, `PSTRBx` keeps the strobes of the previous write | read setup assigns `PADDR/PPROT/PWRITE/PSEL` but not `PSTRB`: burst `src/…_burst.v:242, :244`; simple `src/…_simple.v:156, :158` | [APB] 2.1 Table 2-1 and 3.2: "For read transfers the bus master must drive all bits of PSTRB LOW" | (a) **Recommended:** `PSTRBx <= 0` at read setup, and add a monitor/formal check. (b) Freeze it as a known deviation (an APB4 completer that uses `PSTRB` without `PWRITE` would misbehave) |
-| **O3** | **simple: multi-beat write decode error leaves W beats behind.** With `AWLEN != 0`, simple returns `DECERR` after accepting **one** W beat. The master still has `AWLEN` beats to send; simple then accepts them as `w_pending` and pairs the first one with the **next** AW. That writes stale data to the next address | `src/…_simple.v:130-131` (DECERR on `AWLEN != 0`), `:134-135` (W capture in IDLE), `:179-181` (`ST_ERR_RESP` responds after one W beat) | [AXI] A3.4.1: the master sends `AWLEN + 1` beats and the subordinate must accept them all | (a) **Recommended:** in `ST_ERR_RESP`, sink W beats until `WLAST`, then respond (as the burst top does, D14). (b) Freeze "simple must only see `AxLEN == 0`" as an integration requirement (§T0.5 R2); a violation corrupts the next write |
-| **O4** | **Unaligned start address.** Neither top checks `AxADDR[2:0]`. An unaligned address goes to `PADDR` unchanged, and burst `INCR` steps the unaligned address by 8, where AXI aligns beats after the first | burst `:110, :207`; no alignment check in `aw_param_err`/`ar_param_err` (`:120-121`) | [AXI] A3.4.1 burst address (aligned beats after the first) | (a) `DECERR` on `AxADDR[2:0] != 0`. (b) **Recommended (no RTL change):** freeze "addresses must be 8-byte aligned" as an integration requirement (§T0.5 R3); APB peripherals are normally word-addressed anyway |
-
-When a decision is made: update the row (mark it resolved and give the PR), fix the
-RTL or §T0.5 accordingly, add the directed test, and move the item to §T0.2. Once O1–O4
-are closed, set the version to `1.0` and tag `contract-v1.0`.
+| ID | Finding | Decision / status | Evidence |
+|----|---------|-------------------|----------|
+| **O1** | **AW/AR deadlock.** With `AWVALID` and `ARVALID` both high, neither READY asserted, and a compliant master (which must hold VALID, [AXI] A3.2.1/A3.3) waited forever. Simple also deadlocked on `WVALID` + `ARVALID`. Formal hid it with `assume (!(AWVALID && ARVALID))` | **Resolved (#33):** fixed priority, write wins → D18. Formal assumption replaced by a narrower fairness assumption (no *new* write starts while an AR waits), used only for the bounded AR-liveness check | `test/tb_compliance_{simple,burst}.v` O1a/O1b: deadlock before, pass after |
+| **O2** | **`PSTRB` not driven low on reads**: it kept the previous write's strobes ([APB] 3.2) | **Resolved (#33):** `PSTRB <= 0` at read setup → D19. UVM scoreboard now flags a non-zero read `PSTRB` | compliance TBs' continuous `PSTRB` monitor: errors before, clean after |
+| **O3** | **simple DECERR write left W beats behind**: `B` after one beat, leftover beats paired with the next write. And with AW before W on that path, `WREADY` never asserted (deadlock); the handshake-based formal assumption had made those traces infeasible | **Resolved (#33):** `ST_ERR_RESP` drains W until `WLAST` / `AWLEN + 1` → D20. Simple formal now assumes `AWLEN == 0` (its profile) and still covers the DECERR path via `AWSIZE` | `tb_compliance_simple` O3a/O3b: early B + deadlock before, pass after |
+| **O4** | **Unaligned start address** not checked; burst `INCR` steps the unaligned address | **Resolved (no RTL change):** integration requirement R3 → D21 | — |
+| **O5** | **simple: decode-error read returns one beat.** For `ARLEN != 0`, simple returns a single `DECERR` beat with `RLAST = 1`; AXI requires `ARLEN + 1` beats ([AXI] A3.4.1), and D13 promises that. A compliant master waits for the remaining beats | **Open.** Options: (a) return `ARLEN + 1` `DECERR` beats, as burst does (recommended); (b) freeze as integration requirement R2 (simple must only see `AxLEN == 0`) | `src/axi4_to_apb4_2x_simple.v`, AR error branch in `ST_IDLE` (`S_AXI_RLAST <= 1'b1` on `ARLEN != 0`). Code review only; not yet in a TB |
 
 ### T0.5 Integration requirements
 
-These are frozen as integration requirements for `1.0-rc1`. Resolving an open decision
-the recommended way removes the matching item.
-
-- **R1** (pending O1): the master/interconnect must not present `AWVALID` and `ARVALID`
-  in the same cycle (for simple: `ARVALID` together with `AWVALID` or `WVALID`). Typical
-  fix at integration: an AXI read/write arbiter or a single-port shim in front of the bridge.
-- **R2** (pending O3): simple must only receive `AxLEN == 0`.
-- **R3** (pending O4): all AXI addresses must be 8-byte aligned (`AxADDR[2:0] == 0`).
+- **R2** (pending O5): simple should only receive `ARLEN == 0`; a multi-beat read gets a
+  single `DECERR` beat. (Multi-beat **writes** are now safe: they get `DECERR`, and their
+  W beats are drained.)
+- **R3**: all AXI addresses must be 8-byte aligned (`AxADDR[2:0] == 0`). Unaligned
+  addresses are passed to APB unchanged and are not supported.
 - **R4**: bursts must not cross the APB window (`addr[31]`); a crossing gets `DECERR`, not split.
-- **R5**: APB completers must not depend on `PSTRB` during reads until O2 is resolved.
 - **R6**: only the frozen parameter set (§T0.2) is supported.
+- **R7**: reads have lower priority than writes (D18). If read latency matters, the
+  system must not keep a write always pending.
+
+(R1 "no simultaneous AW/AR" and R5 "don't use `PSTRB` on reads" are retired by the O1/O2 fixes.)
 
 ## Scope
 
@@ -152,8 +152,7 @@ Supported write parameters:
 
 Unsupported write parameters cause a decode error response. The bridge must
 still handle the write data channel predictably so the AXI master is not left
-stalled mid-transaction. (The burst top meets this. The simple top does not for
-`AWLEN != 0`: open decision O3 in §T0.4.)
+stalled mid-transaction. (Both tops meet this; the simple top since the O3 fix, D20.)
 
 ### Write Data Channel
 
@@ -234,7 +233,7 @@ For valid transactions:
 - `DECERR`: unsupported AXI read parameters or APB target-window crossing.
 
 For a decode-error read, the bridge returns `ARLEN + 1` read beats with
-`RRESP == DECERR`, zero `RDATA`, and correct `RLAST`.
+`RRESP == DECERR`, zero `RDATA`, and correct `RLAST`. (The simple top currently returns one beat: open decision O5.)
 
 ## APB4 Behavior
 
