@@ -19,12 +19,15 @@ authored here and run where the tools/PDK exist.
 | **T4** DFT | ◐ **PASS** (scan-ready) | `make dft` → `syn/dft/reports/<top>.scan.rpt`; `syn/dft/DFT_PLAN.md` | OSS scan-readiness audit: latch-free + no combinational loops (hard), flop/scan-chain inventory (simple 415, burst 445), reset-controllability, async set/reset, 0 RAMs (no MBIST). Single-clock (ACLK) → one scan clock. This is the kit's template DFT run. Scan insertion + ATPG (DFT Compiler/TestMAX) = `needs-license`. |
 | **T5** verif sign-off | ◑ strong | UVM-on-Verilator green in CI; 100% line cov; formal safety+liveness | Promote UVM to a licensed sim; document coverage model + exclusions (`doc/coverage_notes.md`). `needs-license` for the sign-off run. |
 | **T6** GLS + PPA | ◐ **PASS** (zero-delay GLS + PPA proxy) | `make gls` → `syn/gls/reports/<top>.gls.rpt`; `make ppa` → `syn/ppa/reports/<top>.ppa.rpt`; `syn/gls/T6_PLAN.md` | **GLS:** both bridge tops synthesize to a generic-gate netlist that **simulates clean** — each block's own self-checking directed TB passes when driven against the netlist (Yosys `simcells`/`simlib` models), catching synth/sim mismatch + X-prop the RTL sim can't. **PPA proxy:** cells/flops + logic-depth(`ltp`) tracked per top (simple 806 cells/418 ff/depth 53; burst 1422/446/189). SDF-timing GLS, Liberty-mapped synth, real area/power/STA, and formal RTL↔netlist LEC = `needs-pdk` (recipe in T6_PLAN.md). |
-| **T7** integration/pkg | ☐ open | `pkg/` (to author) | IP-XACT + register map + RAL + integration guide; becomes the kit's packaging template. |
+| **T7** integration/pkg | ◐ **PASS** (IP-XACT + guide, gated) | `make pkg` → `pkg/check_ipxact.sh`; `pkg/ip-xact/*.xml`, `pkg/INTEGRATION.md` | IP-XACT (IEEE 1685-2014) components for both tops (bus interfaces: AXI4 slave + 2× APB4 master + clock + reset; full 53-port model; `addr[31]` memory map; parameter set). `make pkg` gates well-formedness + structure + **IP-XACT↔RTL port-sync** (fails on drift) — both tops 53/53 match. Integration guide + config matrix + address map in `pkg/INTEGRATION.md`. No CSR RAL: pure protocol bridge, so the "register map" is the `addr[31]` APB decode. Full XSD validation = `IPXACT_XSD=... make pkg`. This is the kit's packaging template. |
 
 Legend: ✅ passed · ◑ authored-not-run · ◐ partial/pathfind · ☐ not started.
 
 ## Promote-to-kit checklist
-Once T1/T2 scaffolding here is reviewed, lift `syn/synth.sh` (parameterized by TOP +
-RTL list), `syn/constraints/*.sdc`, `syn/sta/opensta.tcl`, and this `SIGNOFF.md` template
-into the shared sign-off kit (dv-swarm-kit `signoff/` module per the program doc), then
-instantiate on #4, #2, #1.
+Once the scaffolding here is reviewed, lift into the shared sign-off kit (dv-swarm-kit
+`signoff/` module per the program doc), then instantiate on #4, #2, #1, #5:
+- **T1/T2:** `syn/synth.sh` (parameterized by TOP + RTL list), `syn/constraints/*.sdc`, `syn/sta/opensta.tcl`.
+- **T3/T4:** `syn/lp/upf_lint.tcl`, `syn/dft/scan_readiness.sh`.
+- **T6:** `syn/gls/gls.sh` (netlist GLS vs the block's self-checking TB) + `syn/ppa/ppa.sh` (PPA proxy).
+- **T7:** `pkg/check_ipxact.sh` + the `pkg/ip-xact/*.xml` + `pkg/INTEGRATION.md` templates.
+- This `SIGNOFF.md` template.
