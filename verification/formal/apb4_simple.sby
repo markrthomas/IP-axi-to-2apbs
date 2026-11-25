@@ -14,7 +14,8 @@ cover
 [options]
 bmc:   mode bmc
 cover: mode cover
-depth 30
+# depth was 30 before contract O1: an AR can now wait behind two transactions (L3 < 40)
+depth 45
 
 [engines]
 smtbmc
