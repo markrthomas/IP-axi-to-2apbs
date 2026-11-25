@@ -491,6 +491,33 @@ module apb4_burst_props #(
     end
 
     // ----------------------------------------------------------------
+    // L0: immediate acceptance when nothing is outstanding (contract O1/D18).
+    // The depth-relative stall bounds L1/L3 cannot see a deadlock that starts
+    // after step 1 (it never reaches 49 within depth 50), so the O1 AW/AR
+    // deadlock passed formal. This interface-level safety check catches it
+    // directly: with no transaction outstanding, a valid AW is accepted in the
+    // same cycle, and so is a valid AR when no AW is valid (write wins).
+    // (Checked: it fails on the pre-fix RTL.)
+    // ----------------------------------------------------------------
+    reg f_busy;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_busy <= 1'b0;
+        end else begin
+            if ((S_AXI_AWVALID && S_AXI_AWREADY) || (S_AXI_ARVALID && S_AXI_ARREADY))
+                f_busy <= 1'b1;
+            if ((S_AXI_BVALID && S_AXI_BREADY) || (S_AXI_RVALID && S_AXI_RREADY && S_AXI_RLAST))
+                f_busy <= 1'b0;
+        end
+    end
+    always @(*) begin
+        if (f_past_valid && ARESETn && !f_busy) begin
+            assert (!S_AXI_AWVALID || S_AXI_AWREADY);
+            assert (!(S_AXI_ARVALID && !S_AXI_AWVALID) || S_AXI_ARREADY);
+        end
+    end
+
+    // ----------------------------------------------------------------
     // Cover goals
     // Note: f_wr_id_live / f_rd_id_live clear one cycle AFTER the handshake
     // (registered), so cover goals check the handshake cycle directly.

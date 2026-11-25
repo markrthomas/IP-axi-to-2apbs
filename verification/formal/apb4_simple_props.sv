@@ -185,14 +185,20 @@ module apb4_simple_props #(
     // only for the bounded AR liveness check (L3): write priority lets a
     // back-to-back write stream delay a read indefinitely, so once an AR is
     // waiting the manager does not *start* a new write until that AR is accepted.
-    reg f_ar_hold, f_aw_hold, f_w_hold;
+    // f_wr_aw / f_wr_w: the AW / W of the write currently open has been accepted
+    // (single-beat writes: AWLEN == 0 is assumed below); both clear at B.
+    reg f_ar_hold, f_aw_hold, f_w_hold, f_wr_aw, f_wr_w;
     always @(posedge ACLK or negedge ARESETn) begin
         if (!ARESETn) begin
             f_ar_hold <= 1'b0; f_aw_hold <= 1'b0; f_w_hold <= 1'b0;
+            f_wr_aw   <= 1'b0; f_wr_w    <= 1'b0;
         end else begin
             f_ar_hold <= S_AXI_ARVALID && !S_AXI_ARREADY;
             f_aw_hold <= S_AXI_AWVALID && !S_AXI_AWREADY;
             f_w_hold  <= S_AXI_WVALID  && !S_AXI_WREADY;
+            if (S_AXI_AWVALID && S_AXI_AWREADY) f_wr_aw <= 1'b1;
+            if (S_AXI_WVALID  && S_AXI_WREADY)  f_wr_w  <= 1'b1;
+            if (S_AXI_BVALID  && S_AXI_BREADY) begin f_wr_aw <= 1'b0; f_wr_w <= 1'b0; end
         end
     end
 
@@ -321,15 +327,16 @@ module apb4_simple_props #(
     end
 
     // Fairness (see f_ar_hold above): while an AR waits, a *fresh* AWVALID or
-    // WVALID (one not already waiting) may only appear as the missing partner of
-    // a half-accepted write (W accepted, AW pending, or the reverse). AW/W/AR
-    // raised in the same cycle (the O1 tie), and AW/W already waiting when the AR
-    // arrives, are still explored, so an AR can wait behind at most two
-    // transactions (see L3).
+    // WVALID (one not already waiting) may only appear as the missing half of the
+    // open write (its W taken but not its AW, or the reverse). AW/W/AR raised in
+    // the same cycle (the O1 tie), and AW/W already waiting when the AR arrives,
+    // are still explored, so an AR can wait behind at most two transactions (L3).
+    // (f_w_needs_aw / f_aw_needs_w are not used here: f_aw_needs_w is also set
+    // when the W came a cycle *before* the AW, which let writes chain forever.)
     always @(*) begin
         if (f_past_valid && ARESETn) begin
-            assume (!(f_ar_hold && S_AXI_AWVALID && !f_aw_hold && !f_w_needs_aw));
-            assume (!(f_ar_hold && S_AXI_WVALID  && !f_w_hold  && !f_aw_needs_w));
+            assume (!(f_ar_hold && S_AXI_AWVALID && !f_aw_hold && !(f_wr_w  && !f_wr_aw)));
+            assume (!(f_ar_hold && S_AXI_WVALID  && !f_w_hold  && !(f_wr_aw && !f_wr_w)));
         end
     end
 
@@ -412,15 +419,13 @@ module apb4_simple_props #(
             //     (orphan-W assumption), then write takes up to 19 cy more (APB 7 +
             //     BREADY 5 + state transitions 2).
             assert (f_w_stall  < 5'd25);
-            // L3: AR accepted within 52 cycles. With write priority (contract D18)
+            // L3: AR accepted within 30 cycles. With write priority (contract D18)
             //     an AR can wait behind the transaction in flight *plus* one write
-            //     whose AW or W was already waiting (or raised in the same cycle).
-            //     Worst case is two writes. Each takes up to ~22 cycles from its first
-            //     channel handshake back to IDLE: partner < 5, setup 1, enable 1,
-            //     PREADY wait < 5, B issue 1, BREADY wait < 5, WRITE_RESP->IDLE 2.
-            //     So ~45 cycles; 40 was measured too tight (CI step 42). The fairness
-            //     assumption above excludes a third write. Depth 56 keeps the bound reachable.
-            assert (f_ar_stall < 6'd52);
+            //     whose AW/W was already waiting or raised in the same cycle; the
+            //     fairness assumption above excludes a third. Measured worst case
+            //     (ABC bmc3, depth 56): 27 cycles. L3 < 28 holds, < 27 fails. The
+            //     bound keeps a 2-cycle margin. It was 25 before contract O1.
+            assert (f_ar_stall < 6'd30);
             // L4: BVALID within 10 cycles of APB write setup (7 APB + 3 margin).
             assert (!f_apb_wr_live || (f_apb_wr_to_b < 5'd10));
             // L5: RVALID within 10 cycles of APB read setup (7 APB + 3 margin).
