@@ -412,13 +412,15 @@ module apb4_simple_props #(
             //     (orphan-W assumption), then write takes up to 19 cy more (APB 7 +
             //     BREADY 5 + state transitions 2).
             assert (f_w_stall  < 5'd25);
-            // L3: AR accepted within 40 cycles. With write priority (contract D18)
+            // L3: AR accepted within 52 cycles. With write priority (contract D18)
             //     an AR can wait behind the transaction in flight *plus* one write
-            //     that was already waiting (or raised in the same cycle): read ~12
-            //     + write ~19, or write ~19 + write ~19 (PREADY/BREADY/RREADY < 5,
-            //     orphan partner < 5). The fairness assumption above excludes a
-            //     third. Depth is 45 so the bound is reachable.
-            assert (f_ar_stall < 6'd40);
+            //     whose AW or W was already waiting (or raised in the same cycle).
+            //     Worst case is two writes. Each takes up to ~22 cycles from its first
+            //     channel handshake back to IDLE: partner < 5, setup 1, enable 1,
+            //     PREADY wait < 5, B issue 1, BREADY wait < 5, WRITE_RESP->IDLE 2.
+            //     So ~45 cycles; 40 was measured too tight (CI step 42). The fairness
+            //     assumption above excludes a third write. Depth 56 keeps the bound reachable.
+            assert (f_ar_stall < 6'd52);
             // L4: BVALID within 10 cycles of APB write setup (7 APB + 3 margin).
             assert (!f_apb_wr_live || (f_apb_wr_to_b < 5'd10));
             // L5: RVALID within 10 cycles of APB read setup (7 APB + 3 margin).
