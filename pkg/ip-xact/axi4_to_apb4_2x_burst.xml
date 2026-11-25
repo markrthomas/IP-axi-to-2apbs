@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  IP-XACT (IEEE 1685-2014) component description for axi4_to_apb4_2x_burst.
+  Tapeout-readiness program T7 (../../DESIGN_READINESS.md) packaging deliverable,
+  stood up on the flow pathfinder. Hand-authored from the frozen interface in
+  doc/design_contract.md + the RTL header; validated well-formed + structurally by
+  `make pkg` (pkg/check_ipxact.sh). Bus interfaces reference the standard AMBA
+  abstraction/bus definitions by VLNV (resolved from the integrator's AMBA library).
+-->
+<ipxact:component xmlns:ipxact="http://www.accellera.org/XMLSchema/IPXACT/1685-2014"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ipxact:vendor>markrthomas</ipxact:vendor>
+  <ipxact:library>IP-axi-to-2apbs</ipxact:library>
+  <ipxact:name>axi4_to_apb4_2x_burst</ipxact:name>
+  <ipxact:version>1.0</ipxact:version>
+
+  <ipxact:busInterfaces>
+    <!-- AXI4 subordinate (slave): the single serialized AXI transaction source. -->
+    <ipxact:busInterface>
+      <ipxact:name>S_AXI</ipxact:name>
+      <ipxact:busType vendor="amba.com" library="AMBA4" name="AXI4" version="r0p0_0"/>
+      <ipxact:abstractionTypes>
+        <ipxact:abstractionType>
+          <ipxact:abstractionRef vendor="amba.com" library="AMBA4" name="AXI4_rtl" version="r0p0_0"/>
+          <ipxact:portMaps>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWADDR</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWADDR</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWLEN</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWLEN</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWSIZE</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWSIZE</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWBURST</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWBURST</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWPROT</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWPROT</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWVALID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWVALID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>AWREADY</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_AWREADY</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>WDATA</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_WDATA</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>WSTRB</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_WSTRB</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>WLAST</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_WLAST</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>WVALID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_WVALID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>WREADY</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_WREADY</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>BID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_BID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>BRESP</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_BRESP</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>BVALID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_BVALID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>BREADY</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_BREADY</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARADDR</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARADDR</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARLEN</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARLEN</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARSIZE</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARSIZE</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARBURST</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARBURST</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARPROT</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARPROT</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARVALID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARVALID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>ARREADY</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_ARREADY</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>RID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_RID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>RDATA</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_RDATA</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>RRESP</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_RRESP</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>RLAST</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_RLAST</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>RVALID</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_RVALID</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>RREADY</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>S_AXI_RREADY</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+          </ipxact:portMaps>
+        </ipxact:abstractionType>
+      </ipxact:abstractionTypes>
+      <ipxact:slave>
+        <ipxact:memoryMapRef memoryMapRef="S_AXI_map"/>
+      </ipxact:slave>
+    </ipxact:busInterface>
+
+    <!-- APB4 initiator (master) #0 — address window addr[31]=0 (0x0..0x7FFF_FFFF). -->
+    <ipxact:busInterface>
+      <ipxact:name>APB0</ipxact:name>
+      <ipxact:busType vendor="amba.com" library="AMBA4" name="APB4" version="r0p0_0"/>
+      <ipxact:abstractionTypes>
+        <ipxact:abstractionType>
+          <ipxact:abstractionRef vendor="amba.com" library="AMBA4" name="APB4_rtl" version="r0p0_0"/>
+          <ipxact:portMaps>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PADDR</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PADDR0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PPROT</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PPROT0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PSEL</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PSEL0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PENABLE</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PENABLE0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PWRITE</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PWRITE0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PWDATA</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PWDATA0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PSTRB</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PSTRB0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PRDATA</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PRDATA0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PREADY</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PREADY0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PSLVERR</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PSLVERR0</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+          </ipxact:portMaps>
+        </ipxact:abstractionType>
+      </ipxact:abstractionTypes>
+      <ipxact:master>
+        <ipxact:addressSpaceRef addressSpaceRef="APB0_space"/>
+      </ipxact:master>
+    </ipxact:busInterface>
+
+    <!-- APB4 initiator (master) #1 — address window addr[31]=1 (0x8000_0000..0xFFFF_FFFF). -->
+    <ipxact:busInterface>
+      <ipxact:name>APB1</ipxact:name>
+      <ipxact:busType vendor="amba.com" library="AMBA4" name="APB4" version="r0p0_0"/>
+      <ipxact:abstractionTypes>
+        <ipxact:abstractionType>
+          <ipxact:abstractionRef vendor="amba.com" library="AMBA4" name="APB4_rtl" version="r0p0_0"/>
+          <ipxact:portMaps>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PADDR</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PADDR1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PPROT</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PPROT1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PSEL</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PSEL1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PENABLE</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PENABLE1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PWRITE</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PWRITE1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PWDATA</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PWDATA1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PSTRB</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PSTRB1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PRDATA</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PRDATA1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PREADY</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PREADY1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>PSLVERR</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>PSLVERR1</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+          </ipxact:portMaps>
+        </ipxact:abstractionType>
+      </ipxact:abstractionTypes>
+      <ipxact:master>
+        <ipxact:addressSpaceRef addressSpaceRef="APB1_space"/>
+      </ipxact:master>
+    </ipxact:busInterface>
+
+    <!-- Clock + reset. -->
+    <ipxact:busInterface>
+      <ipxact:name>ACLK</ipxact:name>
+      <ipxact:busType vendor="amba.com" library="AMBA" name="AMBAClock" version="r0p0_0"/>
+      <ipxact:abstractionTypes>
+        <ipxact:abstractionType>
+          <ipxact:abstractionRef vendor="amba.com" library="AMBA" name="AMBAClock_rtl" version="r0p0_0"/>
+          <ipxact:portMaps>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>CLK</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>ACLK</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+          </ipxact:portMaps>
+        </ipxact:abstractionType>
+      </ipxact:abstractionTypes>
+      <ipxact:slave/>
+    </ipxact:busInterface>
+    <ipxact:busInterface>
+      <ipxact:name>ARESETn</ipxact:name>
+      <ipxact:busType vendor="amba.com" library="AMBA" name="AMBAReset" version="r0p0_0"/>
+      <ipxact:abstractionTypes>
+        <ipxact:abstractionType>
+          <ipxact:abstractionRef vendor="amba.com" library="AMBA" name="AMBAReset_rtl" version="r0p0_0"/>
+          <ipxact:portMaps>
+            <ipxact:portMap><ipxact:logicalPort><ipxact:name>RESETn</ipxact:name></ipxact:logicalPort><ipxact:physicalPort><ipxact:name>ARESETn</ipxact:name></ipxact:physicalPort></ipxact:portMap>
+          </ipxact:portMaps>
+        </ipxact:abstractionType>
+      </ipxact:abstractionTypes>
+      <ipxact:slave/>
+    </ipxact:busInterface>
+  </ipxact:busInterfaces>
+
+  <!-- AXI subordinate memory map: the two addr[31]-decoded 2 GiB windows. -->
+  <ipxact:memoryMaps>
+    <ipxact:memoryMap>
+      <ipxact:name>S_AXI_map</ipxact:name>
+      <ipxact:addressBlock>
+        <ipxact:name>APB0_window</ipxact:name>
+        <ipxact:baseAddress>0x00000000</ipxact:baseAddress>
+        <ipxact:range>0x80000000</ipxact:range>
+        <ipxact:width>64</ipxact:width>
+        <ipxact:usage>memory</ipxact:usage>
+      </ipxact:addressBlock>
+      <ipxact:addressBlock>
+        <ipxact:name>APB1_window</ipxact:name>
+        <ipxact:baseAddress>0x80000000</ipxact:baseAddress>
+        <ipxact:range>0x80000000</ipxact:range>
+        <ipxact:width>64</ipxact:width>
+        <ipxact:usage>memory</ipxact:usage>
+      </ipxact:addressBlock>
+    </ipxact:memoryMap>
+  </ipxact:memoryMaps>
+
+  <ipxact:addressSpaces>
+    <ipxact:addressSpace>
+      <ipxact:name>APB0_space</ipxact:name>
+      <ipxact:range>0x80000000</ipxact:range>
+      <ipxact:width>64</ipxact:width>
+    </ipxact:addressSpace>
+    <ipxact:addressSpace>
+      <ipxact:name>APB1_space</ipxact:name>
+      <ipxact:range>0x80000000</ipxact:range>
+      <ipxact:width>64</ipxact:width>
+    </ipxact:addressSpace>
+  </ipxact:addressSpaces>
+
+  <ipxact:model>
+    <ipxact:views>
+      <ipxact:view>
+        <ipxact:name>rtl</ipxact:name>
+        <ipxact:envIdentifier>::</ipxact:envIdentifier>
+        <ipxact:componentInstantiationRef>rtl_impl</ipxact:componentInstantiationRef>
+      </ipxact:view>
+    </ipxact:views>
+    <ipxact:instantiations>
+      <ipxact:componentInstantiation>
+        <ipxact:name>rtl_impl</ipxact:name>
+        <ipxact:language>verilog</ipxact:language>
+        <ipxact:moduleName>axi4_to_apb4_2x_burst</ipxact:moduleName>
+        <ipxact:fileSetRef><ipxact:localName>rtl_files</ipxact:localName></ipxact:fileSetRef>
+      </ipxact:componentInstantiation>
+    </ipxact:instantiations>
+    <ipxact:ports>
+      <ipxact:port><ipxact:name>ACLK</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>ARESETn</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+
+      <ipxact:port><ipxact:name>S_AXI_AWID</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ID_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_AWADDR</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ADDR_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_AWLEN</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>7</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_AWSIZE</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>2</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_AWBURST</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_AWPROT</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>2</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_AWVALID</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_AWREADY</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_WDATA</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_WSTRB</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH/8-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_WLAST</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_WVALID</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_WREADY</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_BID</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ID_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_BRESP</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_BVALID</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_BREADY</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARID</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ID_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARADDR</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ADDR_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARLEN</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>7</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARSIZE</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>2</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARBURST</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARPROT</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>2</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARVALID</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_ARREADY</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_RID</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ID_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_RDATA</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_RRESP</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_RLAST</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_RVALID</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>S_AXI_RREADY</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+
+      <ipxact:port><ipxact:name>PADDR0</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ADDR_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PPROT0</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>2</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PSEL0</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PENABLE0</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PWRITE0</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PWDATA0</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PSTRB0</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH/8-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PRDATA0</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PREADY0</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PSLVERR0</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+
+      <ipxact:port><ipxact:name>PADDR1</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>ADDR_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PPROT1</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>2</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PSEL1</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PENABLE1</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PWRITE1</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PWDATA1</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PSTRB1</ipxact:name><ipxact:wire><ipxact:direction>out</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH/8-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PRDATA1</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction><ipxact:vectors><ipxact:vector><ipxact:left>DATA_WIDTH-1</ipxact:left><ipxact:right>0</ipxact:right></ipxact:vector></ipxact:vectors></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PREADY1</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+      <ipxact:port><ipxact:name>PSLVERR1</ipxact:name><ipxact:wire><ipxact:direction>in</ipxact:direction></ipxact:wire></ipxact:port>
+    </ipxact:ports>
+  </ipxact:model>
+
+  <ipxact:fileSets>
+    <ipxact:fileSet>
+      <ipxact:name>rtl_files</ipxact:name>
+      <ipxact:file>
+        <ipxact:name>../../src/axi4_to_apb4_2x_burst.v</ipxact:name>
+        <ipxact:fileType>verilogSource</ipxact:fileType>
+      </ipxact:file>
+    </ipxact:fileSet>
+  </ipxact:fileSets>
+
+  <!-- Configurable parameters. The current target contract fixes ADDR_WIDTH=32 and
+       DATA_WIDTH=64 (see pkg/INTEGRATION.md); ID_WIDTH may vary and is preserved
+       through responses; APB_ADDR_BIT selects the APB routing bit. -->
+  <ipxact:parameters>
+    <ipxact:parameter parameterId="ID_WIDTH" resolve="user"><ipxact:name>ID_WIDTH</ipxact:name><ipxact:value>4</ipxact:value></ipxact:parameter>
+    <ipxact:parameter parameterId="ADDR_WIDTH" resolve="immediate"><ipxact:name>ADDR_WIDTH</ipxact:name><ipxact:value>32</ipxact:value></ipxact:parameter>
+    <ipxact:parameter parameterId="DATA_WIDTH" resolve="immediate"><ipxact:name>DATA_WIDTH</ipxact:name><ipxact:value>64</ipxact:value></ipxact:parameter>
+    <ipxact:parameter parameterId="APB_ADDR_BIT" resolve="immediate"><ipxact:name>APB_ADDR_BIT</ipxact:name><ipxact:value>31</ipxact:value></ipxact:parameter>
+  </ipxact:parameters>
+</ipxact:component>

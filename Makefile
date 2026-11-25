@@ -569,6 +569,14 @@ ppa:
 	@command -v yosys >/dev/null 2>&1 || { echo "[PPA] yosys not on PATH — skipping"; exit 0; }
 	@bash $(CURDIR)/syn/ppa/ppa.sh
 
+# T7 packaging gate (OSS pathfinder, xmllint): validates the IP-XACT (IEEE 1685-2014)
+# component descriptions in pkg/ip-xact/ — well-formed + structural + a hard check that the
+# model ports match the RTL (fails on drift). Full XSD validation: IPXACT_XSD=... make pkg.
+.PHONY: pkg
+pkg:
+	@command -v xmllint >/dev/null 2>&1 || { echo "[PKG] xmllint not on PATH — skipping"; exit 0; }
+	@bash $(CURDIR)/pkg/check_ipxact.sh
+
 COV_REPORT_HTML ?= coverage_report.html
 
 # Performance benchmark (optimized Verilator model of the burst bridge).
