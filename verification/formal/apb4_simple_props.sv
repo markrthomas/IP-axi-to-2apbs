@@ -176,15 +176,46 @@ module apb4_simple_props #(
         if (!f_past_valid) assume (!ARESETn);
     end
 
-    // Simple-bridge serialization assumption: the bridge cannot arbitrate
-    // between simultaneous write-address/write-data and read-address requests
-    // — presenting both simultaneously deadlocks (each READY blocks on the
-    // other VALID).  Constrain the formal environment to serialized traffic,
-    // matching the bridge's single-outstanding-transaction contract.
-    always @(*) begin
-        assume (!(S_AXI_AWVALID && S_AXI_ARVALID));
-        assume (!(S_AXI_WVALID  && S_AXI_ARVALID));
+    // AW/W vs AR arbitration (contract O1): AW, W and AR may be VALID together;
+    // the bridge gives the write priority. The former assumptions
+    // !(AWVALID && ARVALID) and !(WVALID && ARVALID) hid a deadlock and have
+    // been removed.
+    //
+    // Fairness assumption, needed only for the bounded AR liveness check (L3):
+    // write priority lets a back-to-back write stream delay a read indefinitely,
+    // so once an AR is waiting the manager does not *start* a new write (a fresh
+    // AWVALID or WVALID while no write is open) until that AR is accepted. The
+    // partner of an already-open write (W after AW, or AW after W) is still
+    // allowed, and AW/W/AR raised in the same cycle (the O1 tie) is explored.
+    reg f_ar_hold, f_aw_hold, f_w_hold, f_wr_open;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_ar_hold <= 1'b0; f_aw_hold <= 1'b0; f_w_hold <= 1'b0; f_wr_open <= 1'b0;
+        end else begin
+            f_ar_hold <= S_AXI_ARVALID && !S_AXI_ARREADY;
+            f_aw_hold <= S_AXI_AWVALID && !S_AXI_AWREADY;
+            f_w_hold  <= S_AXI_WVALID  && !S_AXI_WREADY;
+            if ((S_AXI_AWVALID && S_AXI_AWREADY) || (S_AXI_WVALID && S_AXI_WREADY))
+                f_wr_open <= 1'b1;
+            if (S_AXI_BVALID && S_AXI_BREADY)
+                f_wr_open <= 1'b0;
+        end
     end
+    always @(*) begin
+        if (f_past_valid && ARESETn) begin
+            assume (!(f_ar_hold && S_AXI_AWVALID && !f_aw_hold && !f_wr_open));
+            assume (!(f_ar_hold && S_AXI_WVALID  && !f_w_hold  && !f_wr_open));
+        end
+    end
+
+    // Profile: the simple bridge supports single-beat writes only (contract D5).
+    // AWLEN != 0 gets DECERR and its AWLEN+1 W beats are drained (contract O3);
+    // that multi-beat drain is checked by directed sim (test/tb_compliance_simple.v),
+    // not here. Formal still explores the DECERR path via an unsupported AWSIZE,
+    // including AW-before-W. Before the O3 fix that path deadlocked; the
+    // handshake-based orphan-AW assumption below had made those traces infeasible,
+    // so formal never saw the deadlock.
+    always @(*) assume (S_AXI_AWLEN == 8'd0);
 
     // AXI stability assumptions: once VALID is asserted it must hold
     // until READY, and the payload must not change.  This prevents the

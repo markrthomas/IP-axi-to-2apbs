@@ -123,8 +123,12 @@ module axi4_to_apb4_2x_burst #(
     wire busy_with_resp = S_AXI_BVALID || S_AXI_RVALID;
     wire idle_for_new   = !txn_active && !busy_with_resp && (apb_state == APB_IDLE);
 
+    // Fixed priority, write wins: AWVALID and ARVALID may legally be high together
+    // ([AXI] A3.3), and a manager must hold VALID until the handshake (A3.2.1), so
+    // the two READYs must not each wait on the other's VALID (that deadlocked).
+    // Note: a continuous stream of writes can delay reads indefinitely.
     always @(*) begin
-        S_AXI_AWREADY = idle_for_new && !S_AXI_ARVALID;
+        S_AXI_AWREADY = idle_for_new;
         S_AXI_ARREADY = idle_for_new && !S_AXI_AWVALID;
         if (txn_active && axi_is_write && !w_done && (beat_index < beats_total)) begin
             if (txn_decerr) S_AXI_WREADY = 1'b1;
@@ -237,11 +241,12 @@ module axi4_to_apb4_2x_burst #(
                                 apb_state <= APB_SETUP;
                             end
                         end else begin
+                            // [APB] 3.2: PSTRB must be driven LOW for read transfers.
                             if (!rfifo_valid && (!S_AXI_RVALID || S_AXI_RREADY)) begin
                                 if (axi_sel_apb1) begin
-                                    PADDR1 <= axi_addr_reg; PPROT1 <= axi_prot_reg; PWRITE1 <= 1'b0; PSEL1 <= 1'b1;
+                                    PADDR1 <= axi_addr_reg; PPROT1 <= axi_prot_reg; PWRITE1 <= 1'b0; PSTRB1 <= {(DATA_WIDTH/8){1'b0}}; PSEL1 <= 1'b1;
                                 end else begin
-                                    PADDR0 <= axi_addr_reg; PPROT0 <= axi_prot_reg; PWRITE0 <= 1'b0; PSEL0 <= 1'b1;
+                                    PADDR0 <= axi_addr_reg; PPROT0 <= axi_prot_reg; PWRITE0 <= 1'b0; PSTRB0 <= {(DATA_WIDTH/8){1'b0}}; PSEL0 <= 1'b1;
                                 end
                                 apb_state <= APB_SETUP;
                             end

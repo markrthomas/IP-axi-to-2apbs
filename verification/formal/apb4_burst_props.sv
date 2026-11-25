@@ -138,11 +138,27 @@ module apb4_burst_props #(
 
     always @(*) if (!f_past_valid) assume (!ARESETn);
 
-    // Serialization assumption: the bridge cannot arbitrate between simultaneous
-    // write-address and read-address requests — each READY blocks on the other
-    // VALID, causing deadlock.  Constrain the formal environment accordingly.
+    // AW/AR arbitration (contract O1): AWVALID and ARVALID may be high together;
+    // the bridge gives the write priority. The former assumption
+    // !(AWVALID && ARVALID) hid a deadlock and has been removed.
+    //
+    // Fairness assumption, needed only for the bounded AR liveness check (L3):
+    // write priority lets a back-to-back write stream delay a read indefinitely,
+    // so once an AR is waiting the manager does not *start* a new AW (a fresh
+    // AWVALID, not one already waiting) until that AR is accepted. AW and AR
+    // raised in the same cycle (the O1 tie) is still explored.
+    reg f_ar_hold, f_aw_hold;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_ar_hold <= 1'b0; f_aw_hold <= 1'b0;
+        end else begin
+            f_ar_hold <= S_AXI_ARVALID && !S_AXI_ARREADY;
+            f_aw_hold <= S_AXI_AWVALID && !S_AXI_AWREADY;
+        end
+    end
     always @(*) begin
-        assume (!(S_AXI_AWVALID && S_AXI_ARVALID));
+        if (f_past_valid && ARESETn)
+            assume (!(f_ar_hold && S_AXI_AWVALID && !f_aw_hold));
     end
 
     // AXI AW/AR/W stability: once VALID is raised it must hold until READY,
@@ -450,8 +466,8 @@ module apb4_burst_props #(
     // 4-beat burst: 4 × 7 = 28 APB cycles; allow 35 with W-acceptance margin.
     always @(posedge ACLK) begin
         if (f_past_valid && ARESETn) begin
-            // L1: AW stall < depth-1 = 49 cy. The combinatorial conflict assumption
-            // (!(AWVALID && ARVALID)) prevents a stall from starting before step 2
+            // L1: AW stall < depth-1 = 49 cy. AW has priority, so it only waits for
+            // the transaction already in flight; a stall cannot start before step 2
             // (the cycle after a blocking transaction is accepted at step 1), so the
             // maximum consecutive stall within BMC depth 50 is depth-2 = 48 cycles.
             // A 4-beat read can take up to 52 cycles to complete (4 beats × 13 cy),
@@ -465,6 +481,7 @@ module apb4_burst_props #(
             // L3: AR stall < 49 cy. Same depth-relative bound as L1: a second AR
             // presented at step 2 (immediately after AR1 is accepted at step 1)
             // can stall for at most depth-2 = 48 consecutive cycles within depth 50.
+            // With write priority this also relies on the fairness assumption above.
             assert (f_ar_stall < 6'd49);
             // L4: BVALID within 35 cycles of first APB write setup (28 APB + margin).
             assert (!f_apb_wr_live || (f_apb_wr_to_b < 6'd35));

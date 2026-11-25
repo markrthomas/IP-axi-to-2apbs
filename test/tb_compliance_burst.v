@@ -233,7 +233,7 @@ module tb_compliance_burst;
 
     // O1b: while write #1 is in flight on APB1, an AR and a second AW both arrive
     // and wait. When the bridge goes idle, both VALIDs are high together.
-    start_test("O1b AR + 2nd AW queued behind a busy write (APB1)");
+    start_test("O1b AR + 2nd AW queued behind busy write");
     fork
       begin
         drive_aw(32'h8000_0100, 8'd1, 4'h3);

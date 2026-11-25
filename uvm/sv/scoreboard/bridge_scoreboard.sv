@@ -156,6 +156,13 @@ class bridge_scoreboard extends uvm_scoreboard;
                            obs.convert2string()))
       mismatch++;
     end
+    // [APB] IHI0024C 3.2: PSTRB must be driven LOW for read transfers (contract O2).
+    if (obs.pstrb !== '0) begin
+      `uvm_error(get_name(),
+                 $sformatf("RD PSTRB p%u obs=%02h, must be 0 on reads (APB 3.2) %s", p, obs.pstrb,
+                           obs.convert2string()))
+      mismatch++;
+    end
     if (!obs.pslverr && trunc_dw(pred.prdata) !== trunc_dw(obs.prdata)) begin
       `uvm_error(get_name(),
                  $sformatf("RD PRDATA p%u exp(shadow)=%016h obs(APB)=%016h %s", p, pred.prdata, obs.prdata,
