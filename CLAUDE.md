@@ -5,6 +5,16 @@ UVM, formal). One AXI transaction is serialized at a time into APB4 transfers on
 one of two APB ports (address bit 31 selects the port). See `README.md` for the
 architecture and `doc/PLAN.md` for the development plan.
 
+## Tapeout sign-off program (this repo is the flow pathfinder)
+
+This block stands up the T0–T7 tapeout-readiness flow first, then it is promoted to the
+shared `dv-swarm-kit` and rolled onto the other four design-track blocks. **Resuming that
+work — from any state — starts at [`doc/TAPEOUT_HANDOFF.md`](doc/TAPEOUT_HANDOFF.md)**: the
+current status of every gate, how to reproduce each artifact (`make syn dft lp gls ppa pkg`,
+all in CI), and the ordered plan to completion. Gate status + artifact paths live in
+`syn/SIGNOFF.md`; the per-gate plan in `doc/PLAN.md` ("Tapeout readiness"); the workspace
+program + sequencing in `~/proj/DESIGN_READINESS.md`.
+
 ## Verification flows
 
 | Flow | Where | Simulator |

@@ -6,6 +6,10 @@ promoted to the shared sign-off kit once proven. A gate passes only with a cited
 **artifact** (*no artifact = not verified*); `needs-license` / `needs-pdk` items are
 authored here and run where the tools/PDK exist.
 
+> **Picking up this program cold?** Read [`../doc/TAPEOUT_HANDOFF.md`](../doc/TAPEOUT_HANDOFF.md)
+> first — it maps the current state, the reproduce-each-artifact commands, and the ordered
+> plan to completion (this block + the cross-repo rollout).
+
 **Design facts pinned by the pathfinder:** single clock domain (`ACLK` + async
 `ARESETn`), no CDC. Two IP tops: `axi4_to_apb4_2x_simple`, `axi4_to_apb4_2x_burst`
 (regblock is an example slave). Latch-free. Flop count: simple ≈ 343, burst ≈ 443.
