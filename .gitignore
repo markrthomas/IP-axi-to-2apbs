@@ -56,3 +56,5 @@ package-lock.json
 waves_stress.log
 /test/random/runs/
 /docker/last-run-metrics.json
+sim_compl_simple
+sim_compl_burst
