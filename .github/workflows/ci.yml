@@ -116,6 +116,12 @@ jobs:
       - name: T3 low-power UPF consistency lint
         run: make lp
 
+      - name: T6 gate-level simulation (netlist GLS, both bridge tops)
+        run: make gls
+
+      - name: T6 PPA proxy baseline (cells / flops / logic-depth)
+        run: make ppa
+
       - name: Upload sign-off reports (synth / scan)
         if: always()
         uses: actions/upload-artifact@v4
