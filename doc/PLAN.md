@@ -256,6 +256,10 @@ the cocotb test provides a complementary lightweight directed proof.
 > Part of the workspace program in [`../../DESIGN_READINESS.md`](../../DESIGN_READINESS.md).
 > Gate pass criteria + tooling/PDK reality live there. Tags: **[oss-pathfind]**,
 > **[needs-license]**, **[needs-pdk]**.
+>
+> **Resuming this program?** Start at [`TAPEOUT_HANDOFF.md`](TAPEOUT_HANDOFF.md) — the
+> agent handoff: current state of every gate, how to reproduce each artifact, and the
+> ordered plan to completion (this block + the cross-repo rollout).
 
 ### Role in the program: the **flow pathfinder**
 This is the smallest, cleanest, most complete of the five blocks (100% Verilator line coverage,
