@@ -110,7 +110,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .cache/ipxact-1685-2014
-          key: ipxact-1685-2014-xsd-v2
+          key: ipxact-1685-2014-xsd-v3-${{ hashFiles('pkg/ip-xact/schema/ieee-1685-2014.sha256') }}
 
       - name: "Gates — T7 IP-XACT structure + RTL sync + full XSD (strict: the host must serve the schema)"
         run: make pkg pkg-xsd
@@ -120,7 +120,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .cache/ipxact-1685-2014
-          key: ipxact-1685-2014-xsd-v2
+          key: ipxact-1685-2014-xsd-v3-${{ hashFiles('pkg/ip-xact/schema/ieee-1685-2014.sha256') }}
         continue-on-error: true   # key already saved by another run
 
       - name: Build release bundle

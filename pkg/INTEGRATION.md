@@ -140,7 +140,8 @@ synchronous reset.
 - **RTL** is referenced from each component's `fileSet` (`../../src/<top>.v`).
 - **Validate:** `make pkg` checks well-formedness, required structure, and that the model
   ports exactly match the RTL (fails on drift). `make pkg-xsd` adds full XSD validation
-  against the IEEE 1685-2014 schema (needs network to fetch it; CI runs it).
+  against the IEEE 1685-2014 schema. It needs network access; the schema comes from Accellera, or from a pinned copy
+  whose SHA-256s are in `ip-xact/schema/`. CI runs it.
 - **Release bundle:** `make release` builds `dist/<name>-<version>.tar.gz` with a
   `MANIFEST.json` (file list with SHA-256, the source commit, the contract tag and the gate
   status). See [`RELEASE.md`](RELEASE.md).

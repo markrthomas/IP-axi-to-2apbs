@@ -131,9 +131,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .cache/ipxact-1685-2014
-          key: ipxact-1685-2014-xsd-v2
+          key: ipxact-1685-2014-xsd-v3-${{ hashFiles('pkg/ip-xact/schema/ieee-1685-2014.sha256') }}
 
-      - name: T7 IP-XACT full XSD validation (IEEE 1685-2014 schema from Accellera)
+      - name: T7 IP-XACT full XSD validation (IEEE 1685-2014; Accellera, eda.org or pinned GitHub copy)
         run: make pkg-xsd XSD_HOST_OPTIONAL=1
 
       - name: Save the schema mirror (only once it is complete)
@@ -141,7 +141,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .cache/ipxact-1685-2014
-          key: ipxact-1685-2014-xsd-v2
+          key: ipxact-1685-2014-xsd-v3-${{ hashFiles('pkg/ip-xact/schema/ieee-1685-2014.sha256') }}
         continue-on-error: true   # key already saved by another run
 
       - name: T7 release bundle (reproducible build + manifest verify)

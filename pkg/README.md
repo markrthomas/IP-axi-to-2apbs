@@ -19,7 +19,8 @@ promoted to the shared sign-off kit, then instantiated on the sibling IPs.
 
 ```
 make pkg          # xmllint well-formed + structural + model-ports-match-RTL
-make pkg-xsd      # + full XSD validation (fetches the IEEE 1685-2014 schema; needs network)
+make pkg-xsd      # + full XSD validation (fetches the IEEE 1685-2014 schema from Accellera, eda.org or a
+                  #   pinned GitHub copy; every file checked against ip-xact/schema/ieee-1685-2014.sha256)
 IPXACT_XSD=/path/to/1685-2014/index.xsd make pkg   # same, with a local schema copy
 ```
 

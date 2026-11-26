@@ -1,120 +1,144 @@
 #!/usr/bin/env python3
-"""Mirror the IEEE 1685-2014 (IP-XACT) XML schema for offline validation.
+"""Fetch the IEEE 1685-2014 (IP-XACT) XML schema for offline validation.
 
-Downloads index.xsd and every schema it pulls in through xs:include / xs:import
-(followed recursively), rewriting each schemaLocation to a local file name so
-`xmllint --schema <dir>/index.xsd` works with no network access.
+Usage:  scripts/fetch_ipxact_xsd.py <out-dir>
+Then:   IPXACT_XSD=<out-dir>/index.xsd make pkg        (or just: make pkg-xsd)
 
-Usage:  scripts/fetch_ipxact_xsd.py <out-dir> [root-url]
-Then:   IPXACT_XSD=<out-dir>/index.xsd make pkg
+The schema is published by Accellera (IEEE publishes only the standard's text).
+Its files are a fixed set, all with relative schemaLocations, so they are stored
+byte-for-byte as downloaded. The Accellera notice allows copying "WITHOUT
+modifications" only, so nothing is rewritten.
 
-Used by CI (the synth job and the Release workflow), which have network
-access; the schema is not vendored into the repo. A completed mirror is marked
-with <out-dir>/.complete (file list + SHA-256) and reused as-is, so CI can cache
-the directory and stop depending on the schema host after one good fetch.
+Integrity: every file must match the SHA-256 pinned in
+pkg/ip-xact/schema/ieee-1685-2014.sha256 (hash of the content with CRLF
+normalised to LF, so a line-ending-only difference between hosts is not a
+mismatch).
 
-Every download must actually be an XML Schema: the host sometimes answers with
-an HTML page, so each file is checked and retried with backoff (http, then
-https) before giving up.
+Sources, tried in order for the whole file set:
+  1. http://www.accellera.org/XMLSchema/IPXACT/1685-2014/   (canonical)
+  2. https://www.accellera.org/XMLSchema/IPXACT/1685-2014/
+  3. https://www.eda.org/XMLSchema/IPXACT/1685-2014/        (Accellera's other host)
+  4. https://raw.githubusercontent.com/edaa-org/IPXACT-Schema/<pinned commit>/ieee-1685-2014/
+A source that answers with something other than an XML Schema (an HTML page)
+or a network error is skipped and the next source is tried. A source that
+serves a real schema file whose hash does not match the pin is a HARD FAILURE:
+that means the published schema changed or something is tampering, and it
+must not be hidden by falling back.
 
-Exit codes: 0 = mirror complete; 3 = schema host unavailable (nothing was
-validated: the caller must report "not run", never a pass); 2 = usage error.
+A completed fetch writes <out-dir>/.complete and is reused when every pinned
+hash still matches, so CI can cache the directory.
+
+Exit codes: 0 = schema present and verified; 3 = no source served the schema
+(nothing validated: the caller must report "not run", never a pass);
+1 = hash mismatch (integrity failure); 2 = usage error.
 """
 import hashlib
 import re
 import sys
 import time
-import urllib.parse
 import urllib.request
 from pathlib import Path
 
-DEFAULT_ROOT = "http://www.accellera.org/XMLSchema/IPXACT/1685-2014/index.xsd"
-LOC_RE = re.compile(r'(<xs:(?:include|import|redefine)\b[^>]*?\bschemaLocation=")([^"]+)(")')
+ROOT = Path(__file__).resolve().parent.parent
+PIN_FILE = ROOT / "pkg/ip-xact/schema/ieee-1685-2014.sha256"
+GITHUB_COMMIT = "3c683290483598378435ff93d38c5354fb9e5514"
+SOURCES = [
+    "http://www.accellera.org/XMLSchema/IPXACT/1685-2014/",
+    "https://www.accellera.org/XMLSchema/IPXACT/1685-2014/",
+    "https://www.eda.org/XMLSchema/IPXACT/1685-2014/",
+    f"https://raw.githubusercontent.com/edaa-org/IPXACT-Schema/{GITHUB_COMMIT}/ieee-1685-2014/",
+]
+SCHEMA_RE = re.compile(rb"<(?:xs|xsd):schema\b")
+EXIT_OK, EXIT_MISMATCH, EXIT_USAGE, EXIT_UNAVAILABLE = 0, 1, 2, 3
 
 
-def local_name(url: str) -> str:
-    """Flatten a URL to a unique, filesystem-safe file name."""
-    p = urllib.parse.urlparse(url)
-    return (p.netloc + p.path).replace("/", "__")
+class Unavailable(Exception):
+    """The source did not serve an XML Schema (HTML page, HTTP or network error)."""
 
 
-SCHEMA_RE = re.compile(r"<(?:xs|xsd):schema\b")
-EXIT_HOST_UNAVAILABLE = 3
+class Mismatch(Exception):
+    """The source served a schema file whose content does not match the pin."""
 
 
-class HostUnavailable(Exception):
-    pass
+def norm_hash(data: bytes) -> str:
+    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
-def fetch(url: str, attempts: int = 4) -> str:
-    """Download one schema file (http, then https); it must really be an XML Schema."""
-    variants = [url] + ([url.replace("http://", "https://", 1)] if url.startswith("http://") else [])
+def load_pins() -> dict:
+    pins = {}
+    for line in PIN_FILE.read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            h, name = line.split(None, 1)
+            pins[name.strip()] = h
+    return pins
+
+
+def get(url: str, attempts: int = 2) -> bytes:
     last = ""
     for i in range(attempts):
-        for u in variants:
-            try:
-                req = urllib.request.Request(u, headers={"User-Agent": "ipxact-xsd-mirror"})
-                with urllib.request.urlopen(req, timeout=60) as r:
-                    text = r.read().decode("utf-8", errors="replace")
-                if SCHEMA_RE.search(text):
-                    return text
-                last = f"{u}: response is not an XML Schema (starts: {text.lstrip()[:40]!r})"
-            except Exception as e:  # network error, HTTP error, timeout
-                last = f"{u}: {e!r}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ipxact-xsd-fetch"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                data = r.read()
+            if SCHEMA_RE.search(data):
+                return data
+            last = f"not an XML Schema (starts: {data.lstrip()[:40]!r})"
+        except Exception as e:  # HTTP error, timeout, DNS, ...
+            last = repr(e)
         if i < attempts - 1:
-            wait = 5 * (2 ** i)
-            print(f"[XSD] {last}; retry {i + 1}/{attempts - 1} in {wait}s", file=sys.stderr)
-            time.sleep(wait)
-    raise HostUnavailable(last)
+            time.sleep(5)
+    raise Unavailable(f"{url}: {last}")
+
+
+def fetch_from(base: str, pins: dict) -> dict:
+    files = {}
+    for name in sorted(pins):
+        data = get(base + name)
+        got = norm_hash(data)
+        if got != pins[name]:
+            raise Mismatch(f"{base}{name}: sha256 {got} != pinned {pins[name]}")
+        files[name] = data
+    return files
+
+
+def cached_ok(out: Path, pins: dict) -> bool:
+    if not (out / ".complete").is_file():
+        return False
+    return all((out / n).is_file() and norm_hash((out / n).read_bytes()) == h for n, h in pins.items())
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
+    if len(sys.argv) != 2:
         print(__doc__)
-        return 2
+        return EXIT_USAGE
     out = Path(sys.argv[1])
-    root = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_ROOT
     out.mkdir(parents=True, exist_ok=True)
+    pins = load_pins()
 
-    marker = out / ".complete"
-    if marker.is_file() and (out / "index.xsd").is_file():
-        listed = [l.split("  ", 1) for l in marker.read_text().splitlines() if l.strip()]
-        ok = all((out / n).is_file() and
-                 hashlib.sha256((out / n).read_bytes()).hexdigest() == h for h, n in listed)
-        if ok:
-            print(f"[XSD] reusing cached mirror in {out}/ ({len(listed)} files, hashes match)")
-            return 0
-        print("[XSD] cached mirror is incomplete or modified; fetching again")
+    if cached_ok(out, pins):
+        print(f"[XSD] using cached schema in {out}/ ({len(pins)} files, all pinned hashes match)")
+        return EXIT_OK
 
-    todo, done = [root], {}
-    try:
-        mirror(root, out, todo, done)
-    except HostUnavailable as e:
-        print(f"[XSD] schema host unavailable: {e}", file=sys.stderr)
-        return EXIT_HOST_UNAVAILABLE
-    marker.write_text("".join(
-        f"{hashlib.sha256((out / n).read_bytes()).hexdigest()}  {n}\n" for n in sorted(done.values())))
-    print(f"[XSD] mirrored {len(done)} schema file(s) from {root} into {out}/")
-    return 0
-
-
-def mirror(root: str, out: Path, todo: list, done: dict) -> None:
-    while todo:
-        url = todo.pop()
-        if url in done:
+    for base in SOURCES:
+        try:
+            files = fetch_from(base, pins)
+        except Unavailable as e:
+            print(f"[XSD] source unavailable, trying the next one: {e}", file=sys.stderr)
             continue
-        text = fetch(url)
-        name = "index.xsd" if url == root else local_name(url)
-        done[url] = name
+        except Mismatch as e:
+            print(f"[XSD] FAIL: integrity: {e}", file=sys.stderr)
+            print("[XSD] The served schema differs from the pinned IEEE 1685-2014 files. "
+                  "Not falling back: investigate before changing the pins.", file=sys.stderr)
+            return EXIT_MISMATCH
+        for name, data in files.items():
+            (out / name).write_bytes(data)          # stored unmodified
+        (out / ".complete").write_text(f"source {base}\n")
+        print(f"[XSD] fetched {len(files)} schema files from {base} into {out}/ "
+              f"(all match pkg/ip-xact/schema/ieee-1685-2014.sha256)")
+        return EXIT_OK
 
-        def rewrite(m: "re.Match[str]") -> str:
-            dep = urllib.parse.urljoin(url, m.group(2))
-            if dep not in done and dep not in todo:
-                todo.append(dep)
-            dep_name = "index.xsd" if dep == root else local_name(dep)
-            return m.group(1) + dep_name + m.group(3)
-
-        (out / name).write_text(LOC_RE.sub(rewrite, text), encoding="utf-8")
+    print("[XSD] no source served the IEEE 1685-2014 schema", file=sys.stderr)
+    return EXIT_UNAVAILABLE
 
 
 if __name__ == "__main__":
