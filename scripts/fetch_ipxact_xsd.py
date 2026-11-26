@@ -14,7 +14,11 @@ with <out-dir>/.complete (file list + SHA-256) and reused as-is, so CI can cache
 the directory and stop depending on the schema host after one good fetch.
 
 Every download must actually be an XML Schema: the host sometimes answers with
-an HTML page, so each file is checked and retried with backoff before failing.
+an HTML page, so each file is checked and retried with backoff (http, then
+https) before giving up.
+
+Exit codes: 0 = mirror complete; 3 = schema host unavailable (nothing was
+validated: the caller must report "not run", never a pass); 2 = usage error.
 """
 import hashlib
 import re
@@ -35,26 +39,33 @@ def local_name(url: str) -> str:
 
 
 SCHEMA_RE = re.compile(r"<(?:xs|xsd):schema\b")
+EXIT_HOST_UNAVAILABLE = 3
 
 
-def fetch(url: str, attempts: int = 5) -> str:
-    """Download one schema file; retry until it really is an XML Schema."""
+class HostUnavailable(Exception):
+    pass
+
+
+def fetch(url: str, attempts: int = 4) -> str:
+    """Download one schema file (http, then https); it must really be an XML Schema."""
+    variants = [url] + ([url.replace("http://", "https://", 1)] if url.startswith("http://") else [])
     last = ""
     for i in range(attempts):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "ipxact-xsd-mirror"})
-            with urllib.request.urlopen(req, timeout=60) as r:
-                text = r.read().decode("utf-8", errors="replace")
-            if SCHEMA_RE.search(text):
-                return text
-            last = "response is not an XML Schema (starts: %r)" % text.lstrip()[:60]
-        except Exception as e:  # network error, HTTP error, timeout
-            last = repr(e)
-        wait = 5 * (2 ** i)
-        print(f"[XSD] {url}: {last}; retry {i + 1}/{attempts - 1} in {wait}s", file=sys.stderr)
+        for u in variants:
+            try:
+                req = urllib.request.Request(u, headers={"User-Agent": "ipxact-xsd-mirror"})
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    text = r.read().decode("utf-8", errors="replace")
+                if SCHEMA_RE.search(text):
+                    return text
+                last = f"{u}: response is not an XML Schema (starts: {text.lstrip()[:40]!r})"
+            except Exception as e:  # network error, HTTP error, timeout
+                last = f"{u}: {e!r}"
         if i < attempts - 1:
+            wait = 5 * (2 ** i)
+            print(f"[XSD] {last}; retry {i + 1}/{attempts - 1} in {wait}s", file=sys.stderr)
             time.sleep(wait)
-    raise SystemExit(f"[XSD] FAIL: could not fetch a valid schema from {url}: {last}")
+    raise HostUnavailable(last)
 
 
 def main() -> int:
@@ -76,6 +87,18 @@ def main() -> int:
         print("[XSD] cached mirror is incomplete or modified; fetching again")
 
     todo, done = [root], {}
+    try:
+        mirror(root, out, todo, done)
+    except HostUnavailable as e:
+        print(f"[XSD] schema host unavailable: {e}", file=sys.stderr)
+        return EXIT_HOST_UNAVAILABLE
+    marker.write_text("".join(
+        f"{hashlib.sha256((out / n).read_bytes()).hexdigest()}  {n}\n" for n in sorted(done.values())))
+    print(f"[XSD] mirrored {len(done)} schema file(s) from {root} into {out}/")
+    return 0
+
+
+def mirror(root: str, out: Path, todo: list, done: dict) -> None:
     while todo:
         url = todo.pop()
         if url in done:
@@ -92,11 +115,6 @@ def main() -> int:
             return m.group(1) + dep_name + m.group(3)
 
         (out / name).write_text(LOC_RE.sub(rewrite, text), encoding="utf-8")
-
-    marker.write_text("".join(
-        f"{hashlib.sha256((out / n).read_bytes()).hexdigest()}  {n}\n" for n in sorted(done.values())))
-    print(f"[XSD] mirrored {len(done)} schema file(s) from {root} into {out}/")
-    return 0
 
 
 if __name__ == "__main__":

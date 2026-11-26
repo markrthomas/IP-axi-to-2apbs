@@ -127,14 +127,22 @@ jobs:
           command -v xmllint >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y libxml2-utils; }
           make pkg
 
-      - name: Cache the IEEE 1685-2014 schema mirror (fixed standard; avoids the host's flakes)
-        uses: actions/cache@v4
+      - name: Restore the IEEE 1685-2014 schema mirror (fixed standard)
+        uses: actions/cache/restore@v4
         with:
-          path: /tmp/ipxact-1685-2014
-          key: ipxact-1685-2014-xsd-v1
+          path: .cache/ipxact-1685-2014
+          key: ipxact-1685-2014-xsd-v2
 
       - name: T7 IP-XACT full XSD validation (IEEE 1685-2014 schema from Accellera)
-        run: make pkg-xsd
+        run: make pkg-xsd XSD_HOST_OPTIONAL=1
+
+      - name: Save the schema mirror (only once it is complete)
+        if: always() && hashFiles('.cache/ipxact-1685-2014/.complete') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/ipxact-1685-2014
+          key: ipxact-1685-2014-xsd-v2
+        continue-on-error: true   # key already saved by another run
 
       - name: T7 release bundle (reproducible build + manifest verify)
         run: |

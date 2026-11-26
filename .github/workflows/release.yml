@@ -106,14 +106,22 @@ jobs:
       - name: Gates — T1 syn, T4 dft, T3 lp, T6 gls + ppa (reports go into the bundle)
         run: make syn dft lp gls ppa
 
-      - name: Cache the IEEE 1685-2014 schema mirror (fixed standard; avoids the host's flakes)
-        uses: actions/cache@v4
+      - name: Restore the IEEE 1685-2014 schema mirror (fixed standard)
+        uses: actions/cache/restore@v4
         with:
-          path: /tmp/ipxact-1685-2014
-          key: ipxact-1685-2014-xsd-v1
+          path: .cache/ipxact-1685-2014
+          key: ipxact-1685-2014-xsd-v2
 
-      - name: Gates — T7 IP-XACT structure + RTL sync + full XSD
+      - name: "Gates — T7 IP-XACT structure + RTL sync + full XSD (strict: the host must serve the schema)"
         run: make pkg pkg-xsd
+
+      - name: Save the schema mirror (only once it is complete)
+        if: always() && hashFiles('.cache/ipxact-1685-2014/.complete') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/ipxact-1685-2014
+          key: ipxact-1685-2014-xsd-v2
+        continue-on-error: true   # key already saved by another run
 
       - name: Build release bundle
         run: make release VERSION=${{ steps.v.outputs.version }}
