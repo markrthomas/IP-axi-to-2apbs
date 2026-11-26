@@ -58,3 +58,5 @@ waves_stress.log
 /docker/last-run-metrics.json
 sim_compl_simple
 sim_compl_burst
+# release bundles (make release)
+dist/

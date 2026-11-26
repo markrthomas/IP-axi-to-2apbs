@@ -118,10 +118,12 @@ Ordered; the first item is the only one with no external dependency.
 5. **T5 licensed sign-off `[needs-license]`.** Promote the UVM env to a licensed simulator
    run, keep the UVM-on-Verilator gate, and sign off the coverage model + exclusions
    (`doc/coverage_notes.md`).
-6. **T7 release.** Once T0 is frozen: regblock register map + RAL, finalize
-   `pkg/INTEGRATION.md`, run `IPXACT_XSD=… make pkg` for full XSD validation, and cut a
-   **versioned, tagged release with a deliverable manifest** — this becomes the template
-   release the other blocks copy.
+6. **T7 release.** *Release tooling done (2026-11-26):* `pkg/INTEGRATION.md` is written
+   against contract 1.0; the IP-XACT is **XSD-valid** (`make pkg-xsd`, in CI); `make release`
+   builds a reproducible bundle with `MANIFEST.json` (procedure in `pkg/RELEASE.md`, notes
+   in `pkg/RELEASE_NOTES.md`). No RAL: the bridge has no CSRs, and the regblock is an
+   example slave (contract §T0.3). **Remaining (owner):** tag `v1.0.0` and publish the
+   GitHub release with the bundle. This is the template release the other blocks copy.
 7. **Sign `syn/SIGNOFF.md`** — fill artifact path + pass date + reviewer per gate.
 
 ### Track B — roll the kit onto the rest of the program

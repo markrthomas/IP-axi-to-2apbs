@@ -602,6 +602,26 @@ pkg-xsd:
 	python3 $(CURDIR)/scripts/fetch_ipxact_xsd.py $(IPXACT_XSD_DIR)
 	IPXACT_XSD=$(IPXACT_XSD_DIR)/index.xsd bash $(CURDIR)/pkg/check_ipxact.sh
 
+# T7 release bundle (pkg/RELEASE.md): dist/axi4-to-2apbs-<VERSION>.tar.gz + MANIFEST.json.
+# Gate reports present under syn/**/reports/ are archived in the bundle, so run
+# `make syn dft gls ppa` first for a sign-off release.
+RELEASE_OUT ?= dist
+.PHONY: release release-verify release-check
+release:
+	@test -n "$(VERSION)" || { echo "usage: make release VERSION=x.y.z"; exit 2; }
+	python3 $(CURDIR)/scripts/make_release.py --version $(VERSION) --out $(RELEASE_OUT) $(if $(ALLOW_DIRTY),--allow-dirty)
+
+release-verify:
+	@test -n "$(VERSION)" || { echo "usage: make release-verify VERSION=x.y.z"; exit 2; }
+	python3 $(CURDIR)/scripts/make_release.py --verify $(RELEASE_OUT)/axi4-to-2apbs-$(VERSION).tar.gz
+
+# CI check: build twice (must be byte-identical), then verify against the manifest.
+release-check:
+	python3 $(CURDIR)/scripts/make_release.py --version 0.0.0-ci --out /tmp/rel-a $(if $(ALLOW_DIRTY),--allow-dirty)
+	python3 $(CURDIR)/scripts/make_release.py --version 0.0.0-ci --out /tmp/rel-b $(if $(ALLOW_DIRTY),--allow-dirty)
+	cmp /tmp/rel-a/axi4-to-2apbs-0.0.0-ci.tar.gz /tmp/rel-b/axi4-to-2apbs-0.0.0-ci.tar.gz && echo "[REL] reproducible: two builds are byte-identical"
+	python3 $(CURDIR)/scripts/make_release.py --verify /tmp/rel-a/axi4-to-2apbs-0.0.0-ci.tar.gz
+
 COV_REPORT_HTML ?= coverage_report.html
 
 # Performance benchmark (optimized Verilator model of the burst bridge).
