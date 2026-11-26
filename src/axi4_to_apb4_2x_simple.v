@@ -91,6 +91,7 @@ module axi4_to_apb4_2x_simple #(
     localparam ST_READ_APB  = 3'd3;
     localparam ST_READ_RESP = 3'd4;
     localparam ST_ERR_RESP  = 3'd5;
+    localparam ST_RERR_RESP = 3'd6;   // decode-error read: ARLEN+1 DECERR beats
 
     reg [2:0]                state;
     reg [ID_WIDTH-1:0]       id_reg;
@@ -111,6 +112,10 @@ module axi4_to_apb4_2x_simple #(
     reg [7:0]                err_len;     // AWLEN of the DECERR write
     reg [8:0]                err_beats;   // W beats taken so far for it
     reg                      err_wdone;   // all of its W beats taken
+
+    // DECERR read: the subordinate still returns ARLEN+1 beats ([AXI] A3.4.1),
+    // RLAST only on the last. rerr_left = beats still to send after the current one.
+    reg [7:0]                rerr_left;
 
     always @(*) begin
         S_AXI_AWREADY = 1'b0;
@@ -173,8 +178,10 @@ module axi4_to_apb4_2x_simple #(
                     end else if (S_AXI_ARVALID && S_AXI_ARREADY) begin
                         id_reg <= S_AXI_ARID; addr_reg <= S_AXI_ARADDR; prot_reg <= S_AXI_ARPROT; sel_apb1 <= S_AXI_ARADDR[APB_ADDR_BIT];
                         if (S_AXI_ARLEN != 8'd0 || S_AXI_ARSIZE != EXPECTED_AXSIZE) begin
-                            S_AXI_RID <= S_AXI_ARID; S_AXI_RDATA <= {DATA_WIDTH{1'b0}}; S_AXI_RRESP <= 2'b11; S_AXI_RLAST <= 1'b1; S_AXI_RVALID <= 1'b1;
-                            state <= ST_READ_RESP;
+                            S_AXI_RID <= S_AXI_ARID; S_AXI_RDATA <= {DATA_WIDTH{1'b0}}; S_AXI_RRESP <= 2'b11;
+                            S_AXI_RLAST <= (S_AXI_ARLEN == 8'd0); S_AXI_RVALID <= 1'b1;
+                            rerr_left <= S_AXI_ARLEN;
+                            state <= ST_RERR_RESP;
                         end else begin
                             // [APB] 3.2: PSTRB must be driven LOW for read transfers.
                             if (S_AXI_ARADDR[APB_ADDR_BIT]) begin
@@ -228,6 +235,20 @@ module axi4_to_apb4_2x_simple #(
                 end
 
                 ST_READ_RESP: if (!S_AXI_RVALID) state <= ST_IDLE;
+
+                // Stream the remaining DECERR beats; after the last one is
+                // accepted (the RVALID clear above), return to IDLE.
+                ST_RERR_RESP: begin
+                    if (S_AXI_RVALID && S_AXI_RREADY) begin
+                        if (rerr_left != 8'd0) begin
+                            rerr_left    <= rerr_left - 8'd1;
+                            S_AXI_RVALID <= 1'b1;
+                            S_AXI_RLAST  <= (rerr_left == 8'd1);
+                        end else begin
+                            state <= ST_IDLE;
+                        end
+                    end
+                end
 
                 // Excluded from coverage: no legal AXI stimulus can produce an
                 // out-of-range state value; arm is unreachable by design.

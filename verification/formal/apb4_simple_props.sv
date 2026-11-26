@@ -211,6 +211,31 @@ module apb4_simple_props #(
     // so formal never saw the deadlock.
     always @(*) assume (S_AXI_AWLEN == 8'd0);
 
+    // Reads: ARLEN != 0 is a decode error that returns ARLEN+1 DECERR beats
+    // (contract O5). Bounded to 4 beats so the bounded liveness checks (L1/L3)
+    // stay meaningful within the BMC depth; any length is checked by R1.
+    always @(*) assume (S_AXI_ARLEN <= 8'd3);
+
+    // Ghost per read: its ARLEN and ARID, whether it is a decode error, and the
+    // number of R beats already accepted.
+    reg [7:0]          f_rd_len, f_rd_beats;
+    reg [ID_WIDTH-1:0] f_rd_id;
+    reg                f_rd_decerr;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_rd_len <= 8'd0; f_rd_beats <= 8'd0; f_rd_id <= {ID_WIDTH{1'b0}}; f_rd_decerr <= 1'b0;
+        end else begin
+            if (S_AXI_ARVALID && S_AXI_ARREADY) begin
+                f_rd_len    <= S_AXI_ARLEN;
+                f_rd_id     <= S_AXI_ARID;
+                f_rd_decerr <= (S_AXI_ARLEN != 8'd0) || (S_AXI_ARSIZE != 3'b011);
+                f_rd_beats  <= 8'd0;
+            end else if (S_AXI_RVALID && S_AXI_RREADY) begin
+                f_rd_beats  <= f_rd_beats + 8'd1;
+            end
+        end
+    end
+
     // AXI stability assumptions: once VALID is asserted it must hold
     // until READY, and the payload must not change.  This prevents the
     // BMC from exploring illegal AXI master behaviour that cannot
@@ -268,8 +293,18 @@ module apb4_simple_props #(
                 assert (!S_AXI_BVALID);
 
             // P5: RVALID deasserts the cycle after the last beat is accepted.
-            if ($past(S_AXI_RVALID) && $past(S_AXI_RREADY))
+            //     (A decode-error read has ARLEN+1 beats, contract O5, so this
+            //     now applies to the RLAST beat only.)
+            if ($past(S_AXI_RVALID) && $past(S_AXI_RREADY) && $past(S_AXI_RLAST))
                 assert (!S_AXI_RVALID);
+
+            // R1 (contract O5): a read returns exactly ARLEN+1 beats. RLAST is
+            //     set on beat ARLEN and on no other beat.
+            if (S_AXI_RVALID)
+                assert (S_AXI_RLAST == (f_rd_beats == f_rd_len));
+            // R2: RID and RRESP hold across the beats of one decode-error read.
+            if (S_AXI_RVALID && f_rd_beats != 8'd0 && f_rd_decerr)
+                assert (S_AXI_RRESP == 2'b11 && S_AXI_RID == f_rd_id);
 
         end
     end
@@ -422,10 +457,12 @@ module apb4_simple_props #(
             // L3: AR accepted within 30 cycles. With write priority (contract D18)
             //     an AR can wait behind the transaction in flight *plus* one write
             //     whose AW/W was already waiting or raised in the same cycle; the
-            //     fairness assumption above excludes a third. Measured worst case
-            //     (ABC bmc3, depth 56): 27 cycles. L3 < 28 holds, < 27 fails. The
-            //     bound keeps a 2-cycle margin. It was 25 before contract O1.
-            assert (f_ar_stall < 6'd30);
+            //     fairness assumption above excludes a third. Since contract O5 the
+            //     transaction in flight can be a decode-error read of up to 4 beats
+            //     (ARLEN <= 3 assumed). Measured worst case (ABC bmc3, depth 60):
+            //     34 cycles. L3 < 35 holds, < 34 fails. The bound keeps a 2-cycle
+            //     margin. History: 25 before O1, 30 after O1 (worst 27).
+            assert (f_ar_stall < 6'd37);
             // L4: BVALID within 10 cycles of APB write setup (7 APB + 3 margin).
             assert (!f_apb_wr_live || (f_apb_wr_to_b < 5'd10));
             // L5: RVALID within 10 cycles of APB read setup (7 APB + 3 margin).

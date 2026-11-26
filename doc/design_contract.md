@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Contract version** | `1.0-rc2` (T0 **freeze candidate**, 2026-11-25) |
-| **Status** | Not frozen. O1–O4 are decided (fixed in #33, or turned into an integration requirement); **O5 is open** ([§T0.4](#t04-open-decisions-owner)). T0 is tagged `contract-v1.0` once O5 is decided, #33 is merged and the clause numbers are owner-checked. |
-| **Applies to RTL** | `src/axi4_to_apb4_2x_simple.v`, `src/axi4_to_apb4_2x_burst.v` **with the #33 fixes** (O1–O3); `src/axi3lite_regblock.v` (example slave, [§T0.3](#t03-example-slave-axi3lite_regblock)) |
+| **Contract version** | `1.0` (T0 **frozen** in content, 2026-11-26) |
+| **Status** | All five review decisions are closed ([§T0.4](#t04-open-decisions-owner)): O1–O3 and O5 fixed in RTL (#33, #34), O4 an integration requirement. **One step left before the `contract-v1.0` tag:** the owner checks the [AXI]/[APB] clause numbers against his own copies (§T0.1). |
+| **Applies to RTL** | `src/axi4_to_apb4_2x_simple.v`, `src/axi4_to_apb4_2x_burst.v` **with the #33 (O1–O3) and #34 (O5) fixes**; `src/axi3lite_regblock.v` (example slave, [§T0.3](#t03-example-slave-axi3lite_regblock)) |
 
 This document defines the target behavior for the fully functional bridge.
 It is the reference contract for RTL cleanup, verification, and integration
@@ -44,7 +44,7 @@ the spec allows; the integrator must respect it ([§T0.5](#t05-integration-requi
 | D10 | `WSTRB` → `PSTRB` per beat, unchanged | ✓ | ✓ | [AXI] A3.4.3 write strobes; [APB] 3.2 |
 | D11 | `AxPROT` → `PPROT` unchanged | ✓ | ✓ | [AXI] A4.7; [APB] 3.5 |
 | D12 | `PSLVERR` → `SLVERR`. Write: one `BRESP` for the burst, `SLVERR` if any beat erred. Read: per-beat `RRESP` | ✓ | ✓ | [APB] 3.4, 3.4.3 (mapping to AXI); [AXI] A3.4.4 |
-| D13 | Unsupported parameters and window crossing → `DECERR`. A decode-error read returns `AxLEN + 1` beats of `DECERR`, `RDATA = 0`, correct `RLAST` (simple: one beat only, see **O5**) | ◐ | ✓ | [AXI] A3.4.4. `DECERR` is normally an interconnect response; using it for unsupported parameters is the existing design choice, and the TBs check for it. Switching to `SLVERR` would be an owner decision |
+| D13 | Unsupported parameters and window crossing → `DECERR`. A decode-error read returns `AxLEN + 1` beats of `DECERR`, `RDATA = 0`, correct `RLAST` (simple since the O5 fix, #34) | ✓ | ✓ | [AXI] A3.4.4. `DECERR` is normally an interconnect response; using it for unsupported parameters is the existing design choice, and the TBs check for it. Switching to `SLVERR` would be an owner decision |
 | D14 | Malformed `WLAST` (early or missing) → `SLVERR`, and the write-data phase ends on `WLAST` or on beat `AWLEN + 1`, whichever comes first. `DECERR` outranks `SLVERR` | — | ✓ | [AXI] A3.4.1 (write data count must match `AWLEN`); robustness beyond spec |
 | D15 | APB4 transfers: SETUP then ACCESS; completes on `PREADY`; `PADDR/PPROT/PWRITE/PWDATA/PSTRB` stable through wait states; only one `PSEL` ever asserted | ✓ | ✓ | [APB] 3.1, 3.3, 4.1 |
 | D16 | Response signals held stable while `xVALID && !xREADY`; `BID`/`RID` = accepted `AxID` | ✓ | ✓ | [AXI] A3.2.1; A5 (ID) |
@@ -79,8 +79,8 @@ sign-off. It is frozen only so its tests have a stable reference:
 
 Code review for this freeze found five behaviours where the RTL does not do what a
 compliant AXI master or APB4 completer expects. Each is a DUT behaviour change and
-the owner's call. O1–O4 were decided on 2026-11-25 (recommended option in each case);
-O5 was found afterwards, while fixing O3, and is open.
+the owner's call. O1–O4 were decided on 2026-11-25 and O5 on 2026-11-26 (the recommended
+option in each case). O5 was found while fixing O3.
 
 | ID | Finding | Decision / status | Evidence |
 |----|---------|-------------------|----------|
@@ -88,13 +88,10 @@ O5 was found afterwards, while fixing O3, and is open.
 | **O2** | **`PSTRB` not driven low on reads**: it kept the previous write's strobes ([APB] 3.2) | **Resolved (#33):** `PSTRB <= 0` at read setup → D19. UVM scoreboard now flags a non-zero read `PSTRB` | compliance TBs' continuous `PSTRB` monitor: errors before, clean after |
 | **O3** | **simple DECERR write left W beats behind**: `B` after one beat, leftover beats paired with the next write. And with AW before W on that path, `WREADY` never asserted (deadlock); the handshake-based formal assumption had made those traces infeasible | **Resolved (#33):** `ST_ERR_RESP` drains W until `WLAST` / `AWLEN + 1` → D20. Simple formal now assumes `AWLEN == 0` (its profile) and still covers the DECERR path via `AWSIZE` | `tb_compliance_simple` O3a/O3b: early B + deadlock before, pass after |
 | **O4** | **Unaligned start address** not checked; burst `INCR` steps the unaligned address | **Resolved (no RTL change):** integration requirement R3 → D21 | — |
-| **O5** | **simple: decode-error read returns one beat.** For `ARLEN != 0`, simple returns a single `DECERR` beat with `RLAST = 1`; AXI requires `ARLEN + 1` beats ([AXI] A3.4.1), and D13 promises that. A compliant master waits for the remaining beats | **Open.** Options: (a) return `ARLEN + 1` `DECERR` beats, as burst does (recommended); (b) freeze as integration requirement R2 (simple must only see `AxLEN == 0`) | `src/axi4_to_apb4_2x_simple.v`, AR error branch in `ST_IDLE` (`S_AXI_RLAST <= 1'b1` on `ARLEN != 0`). Code review only; not yet in a TB |
+| **O5** | **simple: decode-error read returns one beat.** For `ARLEN != 0`, simple returns a single `DECERR` beat with `RLAST = 1`; AXI requires `ARLEN + 1` beats ([AXI] A3.4.1), and D13 promises that. A compliant master waits for the remaining beats | **Resolved (#34):** a new `ST_RERR_RESP` state streams `ARLEN + 1` `DECERR` beats (`RDATA = 0`, `RID = ARID`, `RLAST` only on the last) → D13 ✓ for simple. Formal: new R1 check (`RLAST` exactly on beat `ARLEN`) and R2 check (`RRESP`/`RID` hold across beats); P5 now applies to the `RLAST` beat; simple props assume `ARLEN ≤ 3`; L3 bound re-measured (worst case 34 → < 37) | `tb_compliance_simple` O5a/O5b: `RLAST` on beat 0 of 4, then deadlock before (CI `regress` on #34's first commit); pass after. Formal R1 fails on the pre-O5 RTL (frame 3) |
 
 ### T0.5 Integration requirements
 
-- **R2** (pending O5): simple should only receive `ARLEN == 0`; a multi-beat read gets a
-  single `DECERR` beat. (Multi-beat **writes** are now safe: they get `DECERR`, and their
-  W beats are drained.)
 - **R3**: all AXI addresses must be 8-byte aligned (`AxADDR[2:0] == 0`). Unaligned
   addresses are passed to APB unchanged and are not supported.
 - **R4**: bursts must not cross the APB window (`addr[31]`); a crossing gets `DECERR`, not split.
@@ -102,7 +99,7 @@ O5 was found afterwards, while fixing O3, and is open.
 - **R7**: reads have lower priority than writes (D18). If read latency matters, the
   system must not keep a write always pending.
 
-(R1 "no simultaneous AW/AR" and R5 "don't use `PSTRB` on reads" are retired by the O1/O2 fixes.)
+(Retired by the RTL fixes: R1 "no simultaneous AW/AR" (O1), R5 "don't use `PSTRB` on reads" (O2) and R2 "simple: `AxLEN == 0` only" (O3 for writes, O5 for reads). Multi-beat requests to the simple top are still unsupported, but they now get a protocol-correct `DECERR`.)
 
 ## Scope
 
@@ -233,7 +230,7 @@ For valid transactions:
 - `DECERR`: unsupported AXI read parameters or APB target-window crossing.
 
 For a decode-error read, the bridge returns `ARLEN + 1` read beats with
-`RRESP == DECERR`, zero `RDATA`, and correct `RLAST`. (The simple top currently returns one beat: open decision O5.)
+`RRESP == DECERR`, zero `RDATA`, and correct `RLAST`. (Both tops; the simple top since the O5 fix.)
 
 ## APB4 Behavior
 
