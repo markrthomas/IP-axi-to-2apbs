@@ -1,6 +1,6 @@
 # SIGNOFF.md — IP-axi-to-2apbs tapeout sign-off checklist
 
-Tracks the eight T-gates from the workspace program (`../DESIGN_READINESS.md`) for this
+Tracks the eight T-gates from the workspace program (`~/proj/DESIGN_READINESS.md`, workspace-only, not in this repo) for this
 block. This repo is the program's **flow pathfinder** — the gate scaffolding here is
 promoted to the shared sign-off kit once proven. A gate passes only with a cited
 **artifact** (*no artifact = not verified*); `needs-license` / `needs-pdk` items are
@@ -12,7 +12,12 @@ authored here and run where the tools/PDK exist.
 
 **Design facts pinned by the pathfinder:** single clock domain (`ACLK` + async
 `ARESETn`), no CDC. Two IP tops: `axi4_to_apb4_2x_simple`, `axi4_to_apb4_2x_burst`
-(regblock is an example slave). Latch-free. Flop count: simple ≈ 343, burst ≈ 443.
+(regblock is an example slave). Latch-free. Flops (PPA baseline, `make ppa`): simple 418,
+burst 446. `make syn` reports 343/443 (`$_DFF*` only) and `make dft` 415/445 (scan-chain
+length); see the flop-count table in `doc/TAPEOUT_HANDOFF.md` §2.
+
+Reports under `syn/**/reports/` are generated and **gitignored**. CI uploads them as the
+`signoff-reports` artifact. Archive each gate's report with the T7 release before signing.
 
 | Gate | Status | Artifact / where | Notes |
 |------|--------|------------------|-------|
@@ -22,7 +27,7 @@ authored here and run where the tools/PDK exist.
 | **T3** low-power | ◐ authored + OSS-lint | `make lp` → `syn/lp/upf_lint.tcl`; `syn/lp/axi_apb.upf`, `syn/lp/LP_PLAN.md` | IEEE-1801 UPF: PD_AON (always-on control) + switchable PD_APB (datapath), header switch + isolation + retention + P0/P1/P2 PST. Consistency lint PASS (2 domains/3 supplies/iso/ret/3 states). This is the kit's low-power template. Power-aware sim (VCS `-upf`) + RTL↔UPF LEC = `needs-license`. |
 | **T4** DFT | ◐ **PASS** (scan-ready) | `make dft` → `syn/dft/reports/<top>.scan.rpt`; `syn/dft/DFT_PLAN.md` | OSS scan-readiness audit: latch-free + no combinational loops (hard), flop/scan-chain inventory (simple 415, burst 445), reset-controllability, async set/reset, 0 RAMs (no MBIST). Single-clock (ACLK) → one scan clock. This is the kit's template DFT run. Scan insertion + ATPG (DFT Compiler/TestMAX) = `needs-license`. |
 | **T5** verif sign-off | ◑ strong | UVM-on-Verilator green in CI; 100% line cov; formal safety+liveness | Promote UVM to a licensed sim; document coverage model + exclusions (`doc/coverage_notes.md`). `needs-license` for the sign-off run. |
-| **T6** GLS + PPA | ◐ **PASS** (zero-delay GLS + PPA proxy) | `make gls` → `syn/gls/reports/<top>.gls.rpt`; `make ppa` → `syn/ppa/reports/<top>.ppa.rpt`; `syn/gls/T6_PLAN.md` | **GLS:** both bridge tops synthesize to a generic-gate netlist that **simulates clean** — each block's own self-checking directed TB passes when driven against the netlist (Yosys `simcells`/`simlib` models), catching synth/sim mismatch + X-prop the RTL sim can't. **PPA proxy:** cells/flops + logic-depth(`ltp`) tracked per top (simple 806 cells/418 ff/depth 53; burst 1422/446/189). SDF-timing GLS, Liberty-mapped synth, real area/power/STA, and formal RTL↔netlist LEC = `needs-pdk` (recipe in T6_PLAN.md). |
+| **T6** GLS + PPA | ◐ **PASS** (zero-delay GLS + PPA proxy) | `make gls` → `syn/gls/reports/<top>.gls.rpt`; `make ppa` → `syn/ppa/reports/<top>.ppa.rpt`; `syn/gls/T6_PLAN.md` | **GLS:** both bridge tops synthesize to a generic-gate netlist that **simulates clean** — each block's own self-checking directed TB passes when driven against the netlist (Yosys `simcells`/`simlib` models), catching synth/sim mismatch + X-prop the RTL sim can't. **PPA proxy:** cells/flops + logic-depth(`ltp`) tracked per top (simple 806 cells/418 ff/depth 42; burst 1396/446/189; CI `synth` job on `e6aca15`, Yosys-version dependent). SDF-timing GLS, Liberty-mapped synth, real area/power/STA, and formal RTL↔netlist LEC = `needs-pdk` (recipe in T6_PLAN.md). |
 | **T7** integration/pkg | ◐ **PASS** (IP-XACT + guide, gated) | `make pkg` → `pkg/check_ipxact.sh`; `pkg/ip-xact/*.xml`, `pkg/INTEGRATION.md` | IP-XACT (IEEE 1685-2014) components for both tops (bus interfaces: AXI4 slave + 2× APB4 master + clock + reset; full 53-port model; `addr[31]` memory map; parameter set). `make pkg` gates well-formedness + structure + **IP-XACT↔RTL port-sync** (fails on drift) — both tops 53/53 match. Integration guide + config matrix + address map in `pkg/INTEGRATION.md`. No CSR RAL: pure protocol bridge, so the "register map" is the `addr[31]` APB decode. Full XSD validation = `IPXACT_XSD=... make pkg`. This is the kit's packaging template. |
 
 Legend: ✅ passed · ◑ authored-not-run · ◐ partial/pathfind · ☐ not started.

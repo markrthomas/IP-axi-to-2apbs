@@ -253,7 +253,7 @@ the cocotb test provides a complementary lightweight directed proof.
 
 ## Tapeout readiness (design sign-off)
 
-> Part of the workspace program in [`../../DESIGN_READINESS.md`](../../DESIGN_READINESS.md).
+> Part of the workspace program in `~/proj/DESIGN_READINESS.md` (workspace-only, not in this repo).
 > Gate pass criteria + tooling/PDK reality live there. Tags: **[oss-pathfind]**,
 > **[needs-license]**, **[needs-pdk]**.
 >
