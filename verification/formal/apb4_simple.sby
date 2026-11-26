@@ -14,8 +14,8 @@ cover
 [options]
 bmc:   mode bmc
 cover: mode cover
-# depth was 30 before contract O1; 36 keeps the L3 bound (< 30, worst case 27) reachable
-depth 36
+# depth: 30 before contract O1, 36 after O1, 42 after O5 (keeps L3 < 37, worst case 34, reachable)
+depth 42
 
 [engines]
 smtbmc

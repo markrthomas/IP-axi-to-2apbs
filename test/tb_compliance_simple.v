@@ -12,6 +12,9 @@
 //   O3a  AWLEN=3 DECERR write: all 4 W beats accepted before B, and none
 //        leaks into the next write
 //   O3b  AWLEN=1 DECERR write with AW before W           -> no deadlock
+//   O5a  ARLEN=3 DECERR read: exactly 4 R beats, all DECERR, RDATA=0,
+//        RLAST only on the 4th, RID=ARID; then a normal read still works
+//   O5b  bad ARSIZE with ARLEN=0: exactly 1 DECERR beat with RLAST
 //
 // A deadlock trips the per-test watchdog and ends the sim with $fatal.
 module tb_compliance_simple;
@@ -171,7 +174,15 @@ module tb_compliance_simple;
 
   task automatic drive_ar(input [ADDR_WIDTH-1:0] addr, input [ID_WIDTH-1:0] id);
   begin
-    S_AXI_ARID <= id; S_AXI_ARADDR <= addr; S_AXI_ARLEN <= 8'd0; S_AXI_ARSIZE <= 3'b011;
+    drive_ar_ls(addr, id, 8'd0, 3'b011);
+  end
+  endtask
+
+  // AR with explicit ARLEN / ARSIZE (for the decode-error read tests).
+  task automatic drive_ar_ls(input [ADDR_WIDTH-1:0] addr, input [ID_WIDTH-1:0] id,
+                             input [7:0] len, input [2:0] size);
+  begin
+    S_AXI_ARID <= id; S_AXI_ARADDR <= addr; S_AXI_ARLEN <= len; S_AXI_ARSIZE <= size;
     S_AXI_ARBURST <= 2'b01; S_AXI_ARPROT <= 3'b000; S_AXI_ARVALID <= 1'b1;
     @(posedge ACLK);
     while (!S_AXI_ARREADY) @(posedge ACLK);
@@ -193,6 +204,27 @@ module tb_compliance_simple;
     @(posedge ACLK);
     while (!S_AXI_RVALID) @(posedge ACLK);
     data = S_AXI_RDATA; resp = S_AXI_RRESP; last = S_AXI_RLAST;
+  end
+  endtask
+
+  // Collect exactly len+1 R beats of a decode-error read ([AXI] A3.4.1: the
+  // subordinate returns ARLEN+1 beats; RLAST only on the last).
+  task automatic collect_r_decerr(input [7:0] len, input [ID_WIDTH-1:0] id);
+    integer b;
+  begin
+    for (b = 0; b <= len; b = b + 1) begin
+      @(posedge ACLK);
+      while (!S_AXI_RVALID) @(posedge ACLK);
+      if (S_AXI_RRESP !== 2'b11) begin
+        $display("ERROR [%0s] beat %0d RRESP=%b exp DECERR", test_name, b, S_AXI_RRESP); errors = errors + 1;
+      end
+      if (S_AXI_RLAST !== (b == len)) begin
+        $display("ERROR [%0s] beat %0d of %0d: RLAST=%b (must be set only on the last beat)",
+                 test_name, b, len + 1, S_AXI_RLAST); errors = errors + 1;
+      end
+      check(S_AXI_RDATA == {DATA_WIDTH{1'b0}}, "DECERR beat RDATA != 0");
+      check(S_AXI_RID == id,                   "DECERR beat RID != ARID");
+    end
   end
   endtask
 
@@ -318,6 +350,35 @@ module tb_compliance_simple;
         check(w_at_b == 2,    "O3b B issued before both W beats were accepted");
       end
     join
+    idle(4);
+
+    // O5a: ARLEN=3 is unsupported by the simple top -> DECERR, but the full
+    // ARLEN+1 = 4 beats must come back, with RLAST only on the last.
+    start_test("O5a ARLEN=3 DECERR returns 4 beats");
+    fork
+      drive_ar_ls(32'h0000_0400, 4'hB, 8'd3, 3'b011);
+      collect_r_decerr(8'd3, 4'hB);
+    join
+    idle(2);
+    // No beat may be left over, and the bridge must take the next read normally.
+    check(!S_AXI_RVALID, "O5a extra R beat after the last DECERR beat");
+    mem0[32'h0000_0408 >> 3] = 64'h0505_0505_0505_0505;
+    fork
+      drive_ar(32'h0000_0408, 4'hC);
+      wait_r(rdata, rresp, rlast);
+    join
+    check(rresp == 2'b00 && rlast,             "O5a follow-up read not OKAY/RLAST");
+    check(rdata == 64'h0505_0505_0505_0505,    "O5a follow-up read returned wrong data");
+    idle(4);
+
+    // O5b: unsupported ARSIZE with ARLEN=0 -> exactly one DECERR beat with RLAST.
+    start_test("O5b bad ARSIZE, ARLEN=0: 1 beat");
+    fork
+      drive_ar_ls(32'h8000_0400, 4'hD, 8'd0, 3'b010);
+      collect_r_decerr(8'd0, 4'hD);
+    join
+    idle(2);
+    check(!S_AXI_RVALID, "O5b extra R beat after the DECERR beat");
     idle(4);
 
     if (errors != 0) begin

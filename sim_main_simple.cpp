@@ -99,7 +99,8 @@ static void write_single(uint32_t addr, uint64_t data,
 }
 
 // Drive a single-beat AXI read; wait for R completion.
-// arlen != 0 triggers the illegal-read error path (RRESP=DECERR).
+// arlen != 0 triggers the illegal-read error path (RRESP=DECERR), which returns
+// arlen+1 DECERR beats (contract O5), so collect arlen+1 R handshakes.
 static void read_single(uint32_t addr, uint8_t arlen = 0, uint8_t arprot = 0) {
     top->S_AXI_ARVALID = 1;
     top->S_AXI_ARADDR  = addr;
@@ -119,13 +120,14 @@ static void read_single(uint32_t addr, uint8_t arlen = 0, uint8_t arprot = 0) {
         ++g_time;
         if (ar_hs) break;
     }
-    for (int i = 0; i < 128; i++) {
+    int beats = 0;
+    for (int i = 0; i < 128 + 4 * (int)arlen; i++) {
         apb_slave();
         bool r_hs = top->S_AXI_RVALID && top->S_AXI_RREADY;
         top->ACLK = 1; top->eval();
         top->ACLK = 0; top->eval();
         ++g_time;
-        if (r_hs) { g_slverr_port = -1; break; }
+        if (r_hs && ++beats == (int)arlen + 1) { g_slverr_port = -1; break; }
     }
     top->S_AXI_RREADY = 0;
     tick();
@@ -161,7 +163,7 @@ int main(int argc, char** argv) {
     // 5. Illegal write: AWLEN=1 on single-beat-only bridge → ST_ERR_RESP write path.
     write_single(0x00003000, 0xBADBADBADBADBADDULL, /*awlen=*/1);
 
-    // 6. Illegal read: ARLEN=1 → ST_READ_RESP error path (lines 152-153).
+    // 6. Illegal read: ARLEN=1 → ST_RERR_RESP error path (2 DECERR beats).
     read_single(0x00004000, /*arlen=*/1);
 
     // 7. PSLVERR on APB slave 0 write → BRESP=SLVERR (exercises the ternary branch).
