@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   IP-XACT (IEEE 1685-2014) component description for axi4_to_apb4_2x_burst.
-  Tapeout-readiness program T7 (../../DESIGN_READINESS.md) packaging deliverable,
+  Tapeout-readiness program T7 packaging deliverable,
   stood up on the flow pathfinder. Hand-authored from the frozen interface in
   doc/design_contract.md + the RTL header; validated well-formed + structurally by
   `make pkg` (pkg/check_ipxact.sh). Bus interfaces reference the standard AMBA
@@ -144,6 +144,19 @@
   </ipxact:busInterfaces>
 
   <!-- AXI subordinate memory map: the two addr[31]-decoded 2 GiB windows. -->
+  <ipxact:addressSpaces>
+    <ipxact:addressSpace>
+      <ipxact:name>APB0_space</ipxact:name>
+      <ipxact:range>0x80000000</ipxact:range>
+      <ipxact:width>64</ipxact:width>
+    </ipxact:addressSpace>
+    <ipxact:addressSpace>
+      <ipxact:name>APB1_space</ipxact:name>
+      <ipxact:range>0x80000000</ipxact:range>
+      <ipxact:width>64</ipxact:width>
+    </ipxact:addressSpace>
+  </ipxact:addressSpaces>
+
   <ipxact:memoryMaps>
     <ipxact:memoryMap>
       <ipxact:name>S_AXI_map</ipxact:name>
@@ -163,19 +176,6 @@
       </ipxact:addressBlock>
     </ipxact:memoryMap>
   </ipxact:memoryMaps>
-
-  <ipxact:addressSpaces>
-    <ipxact:addressSpace>
-      <ipxact:name>APB0_space</ipxact:name>
-      <ipxact:range>0x80000000</ipxact:range>
-      <ipxact:width>64</ipxact:width>
-    </ipxact:addressSpace>
-    <ipxact:addressSpace>
-      <ipxact:name>APB1_space</ipxact:name>
-      <ipxact:range>0x80000000</ipxact:range>
-      <ipxact:width>64</ipxact:width>
-    </ipxact:addressSpace>
-  </ipxact:addressSpaces>
 
   <ipxact:model>
     <ipxact:views>

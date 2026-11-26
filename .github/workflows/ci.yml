@@ -127,6 +127,21 @@ jobs:
           command -v xmllint >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y libxml2-utils; }
           make pkg
 
+      - name: T7 IP-XACT full XSD validation (IEEE 1685-2014 schema from Accellera)
+        run: make pkg-xsd
+
+      - name: T7 release bundle (reproducible build + manifest verify)
+        run: |
+          make release-check
+          mkdir -p dist && cp /tmp/rel-a/* dist/
+
+      - name: Upload release bundle (CI build, version 0.0.0-ci)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          path: dist/
+
       - name: Upload sign-off reports (synth / scan)
         if: always()
         uses: actions/upload-artifact@v4

@@ -12,12 +12,15 @@ promoted to the shared sign-off kit, then instantiated on the sibling IPs.
 | `ip-xact/axi4_to_apb4_2x_burst.xml`  | IP-XACT component — restricted-burst variant (superset). |
 | `INTEGRATION.md` | Integration guide: interfaces, clock/reset/power, address map, parameter/config matrix, how to consume. |
 | `check_ipxact.sh` | The `make pkg` gate: well-formedness + structure + IP-XACT↔RTL port-sync. |
+| `RELEASE.md` | How a versioned release is cut: `make release`, bundle contents, `MANIFEST.json`, tagging. |
+| `RELEASE_NOTES.md` | Notes for the current release (v1.0.0). |
 
 ## Run the gate
 
 ```
 make pkg          # xmllint well-formed + structural + model-ports-match-RTL
-IPXACT_XSD=/path/to/1685-2014/index.xsd make pkg   # + full XSD schema validation
+make pkg-xsd      # + full XSD validation (fetches the IEEE 1685-2014 schema; needs network)
+IPXACT_XSD=/path/to/1685-2014/index.xsd make pkg   # same, with a local schema copy
 ```
 
 `make pkg` is wired into CI (the `synth` job) and fails on any drift between the IP-XACT
