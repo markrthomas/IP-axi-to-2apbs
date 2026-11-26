@@ -43,20 +43,37 @@ Rebuilding the same commit with the same reports gives the same bytes.
 
 ## Procedure
 
-1. `main` is green in CI: CI, UVM on Verilator, Docker plumbing.
-2. Regenerate the gate reports and run the gates:
-   `make syn dft lp gls ppa pkg pkg-xsd test-compliance`.
-3. Build and check the bundle: `make release VERSION=1.0.0`, then `make release-verify VERSION=1.0.0`.
-   CI runs the same build and verify on every push (`release-bundle` artifact).
-4. Tag and publish (owner):
+Releases are built and published **by CI** (`.github/workflows/release.yml`), not on a
+workstation:
+
+1. `main` is green in CI (CI, UVM on Verilator, Docker plumbing), and
+   `pkg/RELEASE_NOTES.md` starts with `# axi4-to-2apbs vX.Y.Z` for the version you are
+   releasing.
+2. Tag the main commit and push the tag (owner):
    ```
    git tag -a v1.0.0 -m "IP release 1.0.0 (contract 1.0)"
    git push https://github.com/markrthomas/IP-axi-to-2apbs.git v1.0.0
-   gh release create v1.0.0 dist/axi4-to-2apbs-1.0.0.tar.gz dist/axi4-to-2apbs-1.0.0.tar.gz.sha256 \
-     --title "v1.0.0" --notes-file pkg/RELEASE_NOTES.md
    ```
-5. Sign the gates in `syn/SIGNOFF.md` (artifact path, pass date, reviewer), citing the
-   release bundle as the archived artifact.
+3. The **Release** workflow then runs on a runner:
+   - **Pre-flight:** checks that the tag is on `main`, that every CI check on that commit
+     succeeded, that the release notes heading matches, and that no release with that name
+     exists yet.
+   - **Tool check:** requires every gate tool. A missing tool is an error, never a skip.
+   - **Gates:** re-runs `make test-all formal syn dft lp gls ppa pkg pkg-xsd`.
+   - **Build and verify:** `make release VERSION=X.Y.Z`, then `make release-verify` and
+     `sha256sum -c`.
+   - **Publish:** the GitHub release `vX.Y.Z`, with the bundle and its `.sha256` attached
+     and `pkg/RELEASE_NOTES.md` as the notes.
+
+   If any step fails, nothing is published. Fix the problem, delete the tag
+   (`git push --delete origin v1.0.0`), and tag again.
+4. Sign the gates in `syn/SIGNOFF.md` (artifact path, pass date, reviewer), citing the
+   published release bundle as the archived artifact.
+
+A pull request that changes the release flow runs the same workflow as a **dry run**
+(version `0.0.0-dryrun`: every gate, build and verify, nothing published). To try a build
+locally: `make release VERSION=x.y.z` and `make release-verify VERSION=x.y.z`. CI also runs
+`make release-check` (two byte-identical builds plus verify) on every push.
 
 ## Scope
 
