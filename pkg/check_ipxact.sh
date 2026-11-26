@@ -72,14 +72,22 @@ for TOP in axi4_to_apb4_2x_simple axi4_to_apb4_2x_burst; do
 done
 
 # optional: full XSD schema validation when a local schema is provided
-if [ -n "${IPXACT_XSD:-}" ] && [ -f "${IPXACT_XSD}" ]; then
+XSD_RUN=0
+if [ -n "${IPXACT_XSD:-}" ] && [ ! -f "${IPXACT_XSD}" ]; then
+  echo "[PKG] XSD schema validation: FAIL — IPXACT_XSD=$IPXACT_XSD does not exist"; rc=1
+elif [ -n "${IPXACT_XSD:-}" ]; then
+  XSD_RUN=1
   echo "[PKG] XSD schema validation against $IPXACT_XSD"
   for TOP in axi4_to_apb4_2x_simple axi4_to_apb4_2x_burst; do
-    xmllint --noout --schema "$IPXACT_XSD" "${XML[$TOP]}" || rc=1
+    if xmllint --noout --nonet --schema "$IPXACT_XSD" "${XML[$TOP]}"; then
+      echo "[PKG] $TOP: XSD valid (IEEE 1685-2014)"
+    else
+      echo "[PKG] $TOP: FAIL — XSD schema validation"; rc=1
+    fi
   done
 else
   echo "[PKG] XSD schema validation: not run (set IPXACT_XSD to the 1685-2014 index.xsd to enable) — this is 'not run', not a pass."
 fi
 
-[ $rc -eq 0 ] && echo "[PKG] T7 packaging gate PASSED (IP-XACT well-formed + structural + in sync with RTL)."
+[ $rc -eq 0 ] && echo "[PKG] T7 packaging gate PASSED (IP-XACT well-formed + structural + in sync with RTL$([ $XSD_RUN -eq 1 ] && echo " + XSD-valid"))."
 exit $rc

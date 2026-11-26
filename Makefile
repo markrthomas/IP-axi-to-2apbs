@@ -594,6 +594,14 @@ pkg:
 	@command -v xmllint >/dev/null 2>&1 || { echo "[PKG] xmllint not on PATH — skipping"; exit 0; }
 	@bash $(CURDIR)/pkg/check_ipxact.sh
 
+# T7 full XSD validation: mirror the IEEE 1685-2014 schema (needs network), then
+# run the pkg gate against it. CI runs this in the synth job.
+IPXACT_XSD_DIR ?= /tmp/ipxact-1685-2014
+.PHONY: pkg-xsd
+pkg-xsd:
+	python3 $(CURDIR)/scripts/fetch_ipxact_xsd.py $(IPXACT_XSD_DIR)
+	IPXACT_XSD=$(IPXACT_XSD_DIR)/index.xsd bash $(CURDIR)/pkg/check_ipxact.sh
+
 COV_REPORT_HTML ?= coverage_report.html
 
 # Performance benchmark (optimized Verilator model of the burst bridge).
