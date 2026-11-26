@@ -52,7 +52,7 @@ the CI run.
 
 | Gate | Status | Reproduce | Artifact (generated = CI `signoff-reports`; committed = in git) |
 |------|--------|-----------|--------------------|
-| **T0** spec freeze | ◐ frozen `1.0`, tag pending | `make test-compliance` | committed: `doc/design_contract.md` §T0; O1–O5 closed (fixes in #33, #34); owner clause check left |
+| **T0** spec freeze | ✅ PASS, tag `contract-v1.0` | `make test-compliance` | committed: `doc/design_contract.md` §T0 (contract `1.0`, frozen at `de98fe8`) |
 | **T1** synth | ◐ pathfind PASS | `make syn` | generated: `syn/reports/*.stat.txt` (latch-free) |
 | **T2** STA | ◐ collateral | — (needs-pdk) | committed: `syn/constraints/axi_apb.sdc`, `syn/sta/opensta.tcl` |
 | **T3** low-power | ◐ authored + OSS-lint | `make lp` | committed: `syn/lp/axi_apb.upf`, `syn/lp/LP_PLAN.md`; lint PASS in CI log |
@@ -100,13 +100,12 @@ go-ahead (see §5); this section is the map of *what* remains, not a licence to 
 
 Ordered; the first item is the only one with no external dependency.
 
-1. **T0 — freeze the spec.** *Contract `1.0`* (`doc/design_contract.md` §T0: decisions
-   D1–D21 with IHI0022E/IHI0024C clause traces, frozen parameter set, integration
-   requirements). All five review decisions are closed: O1–O3 (#33) and O5 (#34) are
-   fixed in RTL with compliance TBs (`make test-compliance`) that fail before and pass
-   after; O4 is an integration requirement. **Remaining (owner only):** check the clause
-   numbers against your own spec copies, then tag `contract-v1.0`. This unblocks a clean
-   T7 release tag.
+1. ✓ **T0 — spec freeze — DONE 2026-11-26.** Contract `1.0` (`doc/design_contract.md`
+   §T0: decisions D1–D21 with owner-checked IHI0022E/IHI0024C clause traces, frozen
+   parameter set, integration requirements), tagged `contract-v1.0` at `de98fe8`. The
+   review's five findings O1–O5 were fixed (#33, #34) or made integration requirements,
+   with compliance TBs (`make test-compliance`) that fail before and pass after. Any
+   later contract change is a new contract version + tag.
 2. **T2/T6 silicon run `[needs-pdk]`.** Take the block through OpenLane/OpenROAD on an
    open PDK (sky130/gf180 — viable for a block this small) for a real GDS, then port to
    the target library: Liberty-mapped synth, SDF-annotated (timing) GLS, OpenSTA/PrimeTime

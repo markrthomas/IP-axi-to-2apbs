@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Contract version** | `1.0` (T0 **frozen** in content, 2026-11-26) |
-| **Status** | All five review decisions are closed ([§T0.4](#t04-open-decisions-owner)): O1–O3 and O5 fixed in RTL (#33, #34), O4 an integration requirement. **One step left before the `contract-v1.0` tag:** the owner checks the [AXI]/[APB] clause numbers against his own copies (§T0.1). |
+| **Contract version** | `1.0` (T0 **frozen**, 2026-11-26; tag `contract-v1.0` @ `de98fe8`) |
+| **Status** | **Frozen.** All five review decisions are closed ([§T0.4](#t04-open-decisions-owner)): O1–O3 and O5 fixed in RTL (#33, #34), O4 an integration requirement. Clause numbers (§T0.1) owner-checked; tagged `contract-v1.0`. Any change to §T0 or the behavioural contract below needs a new contract version and tag. (This status row is the only line edited since the tag.) |
 | **Applies to RTL** | `src/axi4_to_apb4_2x_simple.v`, `src/axi4_to_apb4_2x_burst.v` **with the #33 (O1–O3) and #34 (O5) fixes**; `src/axi3lite_regblock.v` (example slave, [§T0.3](#t03-example-slave-axi3lite_regblock)) |
 
 This document defines the target behavior for the fully functional bridge.
