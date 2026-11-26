@@ -106,6 +106,12 @@ jobs:
       - name: Gates — T1 syn, T4 dft, T3 lp, T6 gls + ppa (reports go into the bundle)
         run: make syn dft lp gls ppa
 
+      - name: Cache the IEEE 1685-2014 schema mirror (fixed standard; avoids the host's flakes)
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ipxact-1685-2014
+          key: ipxact-1685-2014-xsd-v1
+
       - name: Gates — T7 IP-XACT structure + RTL sync + full XSD
         run: make pkg pkg-xsd
 

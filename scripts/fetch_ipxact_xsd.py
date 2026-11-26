@@ -8,11 +8,18 @@ Downloads index.xsd and every schema it pulls in through xs:include / xs:import
 Usage:  scripts/fetch_ipxact_xsd.py <out-dir> [root-url]
 Then:   IPXACT_XSD=<out-dir>/index.xsd make pkg
 
-Used by CI (the synth job), which has network access; the schema is not
-vendored into the repo.
+Used by CI (the synth job and the Release workflow), which have network
+access; the schema is not vendored into the repo. A completed mirror is marked
+with <out-dir>/.complete (file list + SHA-256) and reused as-is, so CI can cache
+the directory and stop depending on the schema host after one good fetch.
+
+Every download must actually be an XML Schema: the host sometimes answers with
+an HTML page, so each file is checked and retried with backoff before failing.
 """
+import hashlib
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -27,10 +34,27 @@ def local_name(url: str) -> str:
     return (p.netloc + p.path).replace("/", "__")
 
 
-def fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "ipxact-xsd-mirror"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read().decode("utf-8")
+SCHEMA_RE = re.compile(r"<(?:xs|xsd):schema\b")
+
+
+def fetch(url: str, attempts: int = 5) -> str:
+    """Download one schema file; retry until it really is an XML Schema."""
+    last = ""
+    for i in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ipxact-xsd-mirror"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                text = r.read().decode("utf-8", errors="replace")
+            if SCHEMA_RE.search(text):
+                return text
+            last = "response is not an XML Schema (starts: %r)" % text.lstrip()[:60]
+        except Exception as e:  # network error, HTTP error, timeout
+            last = repr(e)
+        wait = 5 * (2 ** i)
+        print(f"[XSD] {url}: {last}; retry {i + 1}/{attempts - 1} in {wait}s", file=sys.stderr)
+        if i < attempts - 1:
+            time.sleep(wait)
+    raise SystemExit(f"[XSD] FAIL: could not fetch a valid schema from {url}: {last}")
 
 
 def main() -> int:
@@ -40,6 +64,16 @@ def main() -> int:
     out = Path(sys.argv[1])
     root = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_ROOT
     out.mkdir(parents=True, exist_ok=True)
+
+    marker = out / ".complete"
+    if marker.is_file() and (out / "index.xsd").is_file():
+        listed = [l.split("  ", 1) for l in marker.read_text().splitlines() if l.strip()]
+        ok = all((out / n).is_file() and
+                 hashlib.sha256((out / n).read_bytes()).hexdigest() == h for h, n in listed)
+        if ok:
+            print(f"[XSD] reusing cached mirror in {out}/ ({len(listed)} files, hashes match)")
+            return 0
+        print("[XSD] cached mirror is incomplete or modified; fetching again")
 
     todo, done = [root], {}
     while todo:
@@ -59,6 +93,8 @@ def main() -> int:
 
         (out / name).write_text(LOC_RE.sub(rewrite, text), encoding="utf-8")
 
+    marker.write_text("".join(
+        f"{hashlib.sha256((out / n).read_bytes()).hexdigest()}  {n}\n" for n in sorted(done.values())))
     print(f"[XSD] mirrored {len(done)} schema file(s) from {root} into {out}/")
     return 0
 
