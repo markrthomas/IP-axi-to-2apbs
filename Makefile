@@ -66,6 +66,9 @@ BURST_RTL = src/axi4_to_apb4_2x_burst.v
 SIMPLE_WS_TB = test/tb_axi4_to_apb4_2x_simple_ws.v
 PARAM_TB = test/tb_parameterized_config.v
 STRESS_TB = test/tb_stress_burst.v
+# AXI4/APB4 compliance regressions (doc/design_contract.md §T0.4 O1-O3)
+COMPL_SIMPLE_TB = test/tb_compliance_simple.v
+COMPL_BURST_TB  = test/tb_compliance_burst.v
 WAVE_MACROS = test/wave_macros.v
 
 WAIT_CYCLES ?= 2
@@ -213,9 +216,9 @@ help:
 
 test: test-all
 
-test-all: test-simple test-burst test-regblock
+test-all: test-simple test-burst test-regblock test-compliance
 
-test-full: test-simple test-burst test-burst-ext test-param test-simple-ws
+test-full: test-simple test-burst test-burst-ext test-param test-simple-ws test-compliance
 
 check: lint test-all
 
@@ -240,6 +243,12 @@ test-burst: sim_burst
 
 test-burst-ext: sim_burst_ext
 	$(VVP) sim_burst_ext
+
+# AXI4/APB4 compliance: AW/AR/W VALID conflicts, PSTRB on reads, DECERR W drain.
+.PHONY: test-compliance
+test-compliance: sim_compl_simple sim_compl_burst
+	$(VVP) sim_compl_simple
+	$(VVP) sim_compl_burst
 
 test-param: sim_param
 	$(VVP) sim_param
@@ -323,6 +332,12 @@ sim_burst: $(BURST_TB) $(BURST_RTL) $(WAVE_MACROS)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(filter-out $(WAVE_MACROS),$^)
 
 sim_burst_ext: $(BURST_EXT_TB) $(BURST_RTL) $(WAVE_MACROS)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(filter-out $(WAVE_MACROS),$^)
+
+sim_compl_simple: $(COMPL_SIMPLE_TB) $(SIMPLE_RTL) $(WAVE_MACROS)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(filter-out $(WAVE_MACROS),$^)
+
+sim_compl_burst: $(COMPL_BURST_TB) $(BURST_RTL) $(WAVE_MACROS)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(filter-out $(WAVE_MACROS),$^)
 
 sim_simple_ws_%: $(SIMPLE_WS_TB) $(SIMPLE_RTL) $(WAVE_MACROS)
@@ -515,6 +530,8 @@ _lint_iverilog:
 	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_burst_ext_w $(BURST_EXT_TB) $(BURST_RTL)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_param_w $(PARAM_TB) $(BURST_RTL)
 	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_regblock_w $(REGBLOCK_TB) $(REGBLOCK_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_compl_simple_w $(COMPL_SIMPLE_TB) $(SIMPLE_RTL)
+	$(IVERILOG) $(IVERILOG_FLAGS) -o /tmp/sim_compl_burst_w $(COMPL_BURST_TB) $(BURST_RTL)
 
 _lint_verilator:
 	@if command -v $(VERILATOR) >/dev/null 2>&1; then \
@@ -815,7 +832,7 @@ report_check:
 	docker-uvm-build docker-uvm-run railway-deploy railway-logs railway-run check-docker report report_check
 
 clean:
-	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock \
+	rm -f sim_simple sim_burst sim_burst_ext sim_simple_ws_* sim_param sim_stress sim_regblock sim_compl_simple sim_compl_burst \
 		waves_*.fst waves_*.vcd waves_stress.log burst.vcd param.vcd $(ALL_MD_PDF) \
 		coverage_simple.info coverage_burst.info coverage_regblock.info $(COV_REPORT_HTML) \
 		$(PERF_REPORT_HTML) $(PERF_METRICS)

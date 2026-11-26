@@ -176,15 +176,40 @@ module apb4_simple_props #(
         if (!f_past_valid) assume (!ARESETn);
     end
 
-    // Simple-bridge serialization assumption: the bridge cannot arbitrate
-    // between simultaneous write-address/write-data and read-address requests
-    // — presenting both simultaneously deadlocks (each READY blocks on the
-    // other VALID).  Constrain the formal environment to serialized traffic,
-    // matching the bridge's single-outstanding-transaction contract.
-    always @(*) begin
-        assume (!(S_AXI_AWVALID && S_AXI_ARVALID));
-        assume (!(S_AXI_WVALID  && S_AXI_ARVALID));
+    // AW/W vs AR arbitration (contract O1): AW, W and AR may be VALID together;
+    // the bridge gives the write priority. The former assumptions
+    // !(AWVALID && ARVALID) and !(WVALID && ARVALID) hid a deadlock and have
+    // been removed.
+    //
+    // Fairness assumption (declared below, after the orphan AW/W ghosts), needed
+    // only for the bounded AR liveness check (L3): write priority lets a
+    // back-to-back write stream delay a read indefinitely, so once an AR is
+    // waiting the manager does not *start* a new write until that AR is accepted.
+    // f_wr_aw / f_wr_w: the AW / W of the write currently open has been accepted
+    // (single-beat writes: AWLEN == 0 is assumed below); both clear at B.
+    reg f_ar_hold, f_aw_hold, f_w_hold, f_wr_aw, f_wr_w;
+    always @(posedge ACLK or negedge ARESETn) begin
+        if (!ARESETn) begin
+            f_ar_hold <= 1'b0; f_aw_hold <= 1'b0; f_w_hold <= 1'b0;
+            f_wr_aw   <= 1'b0; f_wr_w    <= 1'b0;
+        end else begin
+            f_ar_hold <= S_AXI_ARVALID && !S_AXI_ARREADY;
+            f_aw_hold <= S_AXI_AWVALID && !S_AXI_AWREADY;
+            f_w_hold  <= S_AXI_WVALID  && !S_AXI_WREADY;
+            if (S_AXI_AWVALID && S_AXI_AWREADY) f_wr_aw <= 1'b1;
+            if (S_AXI_WVALID  && S_AXI_WREADY)  f_wr_w  <= 1'b1;
+            if (S_AXI_BVALID  && S_AXI_BREADY) begin f_wr_aw <= 1'b0; f_wr_w <= 1'b0; end
+        end
     end
+
+    // Profile: the simple bridge supports single-beat writes only (contract D5).
+    // AWLEN != 0 gets DECERR and its AWLEN+1 W beats are drained (contract O3);
+    // that multi-beat drain is checked by directed sim (test/tb_compliance_simple.v),
+    // not here. Formal still explores the DECERR path via an unsupported AWSIZE,
+    // including AW-before-W. Before the O3 fix that path deadlocked; the
+    // handshake-based orphan-AW assumption below had made those traces infeasible,
+    // so formal never saw the deadlock.
+    always @(*) assume (S_AXI_AWLEN == 8'd0);
 
     // AXI stability assumptions: once VALID is asserted it must hold
     // until READY, and the payload must not change.  This prevents the
@@ -301,6 +326,20 @@ module apb4_simple_props #(
         end
     end
 
+    // Fairness (see f_ar_hold above): while an AR waits, a *fresh* AWVALID or
+    // WVALID (one not already waiting) may only appear as the missing half of the
+    // open write (its W taken but not its AW, or the reverse). AW/W/AR raised in
+    // the same cycle (the O1 tie), and AW/W already waiting when the AR arrives,
+    // are still explored, so an AR can wait behind at most two transactions (L3).
+    // (f_w_needs_aw / f_aw_needs_w are not used here: f_aw_needs_w is also set
+    // when the W came a cycle *before* the AW, which let writes chain forever.)
+    always @(*) begin
+        if (f_past_valid && ARESETn) begin
+            assume (!(f_ar_hold && S_AXI_AWVALID && !f_aw_hold && !(f_wr_w  && !f_wr_aw)));
+            assume (!(f_ar_hold && S_AXI_WVALID  && !f_w_hold  && !(f_wr_aw && !f_wr_w)));
+        end
+    end
+
     always @(posedge ACLK) begin
         if (f_past_valid && ARESETn) begin
             assume (f_p0_wait        < 3'd5);
@@ -313,14 +352,15 @@ module apb4_simple_props #(
     end
 
     // Count consecutive cycles each channel VALID is high without READY.
-    reg [4:0] f_aw_stall, f_w_stall, f_ar_stall;
+    reg [4:0] f_aw_stall, f_w_stall;
+    reg [5:0] f_ar_stall;   // 6 bits: AR may wait behind two transactions (L3)
     always @(posedge ACLK or negedge ARESETn) begin
         if (!ARESETn) begin
-            f_aw_stall <= 5'd0; f_w_stall <= 5'd0; f_ar_stall <= 5'd0;
+            f_aw_stall <= 5'd0; f_w_stall <= 5'd0; f_ar_stall <= 6'd0;
         end else begin
             f_aw_stall <= (S_AXI_AWVALID && !S_AXI_AWREADY) ? f_aw_stall + 5'd1 : 5'd0;
             f_w_stall  <= (S_AXI_WVALID  && !S_AXI_WREADY)  ? f_w_stall  + 5'd1 : 5'd0;
-            f_ar_stall <= (S_AXI_ARVALID && !S_AXI_ARREADY) ? f_ar_stall + 5'd1 : 5'd0;
+            f_ar_stall <= (S_AXI_ARVALID && !S_AXI_ARREADY) ? f_ar_stall + 6'd1 : 6'd0;
         end
     end
 
@@ -379,8 +419,13 @@ module apb4_simple_props #(
             //     (orphan-W assumption), then write takes up to 19 cy more (APB 7 +
             //     BREADY 5 + state transitions 2).
             assert (f_w_stall  < 5'd25);
-            // L3: AR accepted within 25 cycles (write completes in ~19 cy + margin).
-            assert (f_ar_stall < 5'd25);
+            // L3: AR accepted within 30 cycles. With write priority (contract D18)
+            //     an AR can wait behind the transaction in flight *plus* one write
+            //     whose AW/W was already waiting or raised in the same cycle; the
+            //     fairness assumption above excludes a third. Measured worst case
+            //     (ABC bmc3, depth 56): 27 cycles. L3 < 28 holds, < 27 fails. The
+            //     bound keeps a 2-cycle margin. It was 25 before contract O1.
+            assert (f_ar_stall < 6'd30);
             // L4: BVALID within 10 cycles of APB write setup (7 APB + 3 margin).
             assert (!f_apb_wr_live || (f_apb_wr_to_b < 5'd10));
             // L5: RVALID within 10 cycles of APB read setup (7 APB + 3 margin).

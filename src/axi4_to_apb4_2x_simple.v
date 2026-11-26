@@ -71,8 +71,9 @@ module axi4_to_apb4_2x_simple #(
     input  wire                      PSLVERR1
 );
 
-    // Single-beat only: burst type and WLAST are don't-cares (AWLEN/ARLEN != 0 is rejected above).
-    wire _unused_ok = &{1'b0, S_AXI_AWBURST, S_AXI_WLAST, S_AXI_ARBURST};
+    // Single-beat only: burst type is a don't-care (AWLEN/ARLEN != 0 is rejected
+    // below). WLAST is only used to end the W drain of a DECERR write.
+    wire _unused_ok = &{1'b0, S_AXI_AWBURST, S_AXI_ARBURST};
 
     // verilator coverage_off
     localparam EXPECTED_AXSIZE = (DATA_WIDTH == 1024) ? 3'b111 :
@@ -102,22 +103,36 @@ module axi4_to_apb4_2x_simple #(
 
     reg [DATA_WIDTH-1:0]     wdata_reg;
     reg [(DATA_WIDTH/8)-1:0] wstrb_reg;
+    reg                      wlast_reg;   // WLAST of the beat captured in w_pending
+
+    // DECERR write: the manager still sends AWLEN+1 beats ([AXI] A3.4.1) and B may
+    // only follow the last one (A3.3.1), so ST_ERR_RESP sinks W beats until WLAST
+    // or until AWLEN+1 beats have been taken, whichever comes first.
+    reg [7:0]                err_len;     // AWLEN of the DECERR write
+    reg [8:0]                err_beats;   // W beats taken so far for it
+    reg                      err_wdone;   // all of its W beats taken
 
     always @(*) begin
         S_AXI_AWREADY = 1'b0;
         S_AXI_WREADY  = 1'b0;
         S_AXI_ARREADY = 1'b0;
+        // Fixed priority, write wins: AW/W READY no longer wait on ARVALID. A manager
+        // may raise AW/W and AR together ([AXI] A3.3) and must hold VALID until the
+        // handshake (A3.2.1), so mutual READY gating deadlocked. A continuous
+        // stream of writes can delay reads indefinitely.
         if (state == ST_IDLE) begin
-            if (!aw_pending && !S_AXI_ARVALID) S_AXI_AWREADY = 1'b1;
-            if (!w_pending && !S_AXI_ARVALID)  S_AXI_WREADY  = 1'b1;
+            if (!aw_pending) S_AXI_AWREADY = 1'b1;
+            if (!w_pending)  S_AXI_WREADY  = 1'b1;
             if (!aw_pending && !w_pending && !S_AXI_AWVALID && !S_AXI_WVALID) S_AXI_ARREADY = 1'b1;
+        end else if (state == ST_ERR_RESP) begin
+            S_AXI_WREADY = !err_wdone;
         end
     end
 
     always @(posedge ACLK or negedge ARESETn) begin
         if (!ARESETn) begin
             state <= ST_IDLE;
-            aw_pending <= 1'b0; w_pending <= 1'b0;
+            aw_pending <= 1'b0; w_pending <= 1'b0; err_wdone <= 1'b0;
             S_AXI_BVALID <= 1'b0; S_AXI_RVALID <= 1'b0;
             {PSEL0, PENABLE0, PSEL1, PENABLE1} <= 4'b0;
         end else begin
@@ -129,11 +144,20 @@ module axi4_to_apb4_2x_simple #(
                     if (S_AXI_AWVALID && S_AXI_AWREADY) begin
                         id_reg <= S_AXI_AWID; addr_reg <= S_AXI_AWADDR; prot_reg <= S_AXI_AWPROT; sel_apb1 <= S_AXI_AWADDR[APB_ADDR_BIT];
                         if (S_AXI_AWLEN != 8'd0 || S_AXI_AWSIZE != EXPECTED_AXSIZE) begin
-                             err_resp <= 2'b11; state <= ST_ERR_RESP; aw_pending <= 1'b1;
+                            err_resp <= 2'b11; state <= ST_ERR_RESP; aw_pending <= 1'b1;
+                            err_len  <= S_AXI_AWLEN;
+                            // Count a beat already taken (earlier, or in this cycle).
+                            if (w_pending) begin
+                                err_beats <= 9'd1; err_wdone <= wlast_reg || (S_AXI_AWLEN == 8'd0);
+                            end else if (S_AXI_WVALID && S_AXI_WREADY) begin
+                                err_beats <= 9'd1; err_wdone <= S_AXI_WLAST || (S_AXI_AWLEN == 8'd0);
+                            end else begin
+                                err_beats <= 9'd0; err_wdone <= 1'b0;
+                            end
                         end else aw_pending <= 1'b1;
                     end
                     if (S_AXI_WVALID && S_AXI_WREADY) begin
-                        wdata_reg <= S_AXI_WDATA; wstrb_reg <= S_AXI_WSTRB; w_pending <= 1'b1;
+                        wdata_reg <= S_AXI_WDATA; wstrb_reg <= S_AXI_WSTRB; wlast_reg <= S_AXI_WLAST; w_pending <= 1'b1;
                     end
                     if (aw_pending && w_pending) begin
                         aw_pending <= 1'b0; w_pending <= 1'b0;
@@ -152,10 +176,11 @@ module axi4_to_apb4_2x_simple #(
                             S_AXI_RID <= S_AXI_ARID; S_AXI_RDATA <= {DATA_WIDTH{1'b0}}; S_AXI_RRESP <= 2'b11; S_AXI_RLAST <= 1'b1; S_AXI_RVALID <= 1'b1;
                             state <= ST_READ_RESP;
                         end else begin
+                            // [APB] 3.2: PSTRB must be driven LOW for read transfers.
                             if (S_AXI_ARADDR[APB_ADDR_BIT]) begin
-                                PADDR1 <= S_AXI_ARADDR; PPROT1 <= S_AXI_ARPROT; PWRITE1 <= 1'b0; PSEL1 <= 1'b1;
+                                PADDR1 <= S_AXI_ARADDR; PPROT1 <= S_AXI_ARPROT; PWRITE1 <= 1'b0; PSTRB1 <= {(DATA_WIDTH/8){1'b0}}; PSEL1 <= 1'b1;
                             end else begin
-                                PADDR0 <= S_AXI_ARADDR; PPROT0 <= S_AXI_ARPROT; PWRITE0 <= 1'b0; PSEL0 <= 1'b1;
+                                PADDR0 <= S_AXI_ARADDR; PPROT0 <= S_AXI_ARPROT; PWRITE0 <= 1'b0; PSTRB0 <= {(DATA_WIDTH/8){1'b0}}; PSEL0 <= 1'b1;
                             end
                             state <= ST_READ_APB;
                         end
@@ -177,7 +202,11 @@ module axi4_to_apb4_2x_simple #(
                 end
 
                 ST_ERR_RESP: begin
-                    if (aw_pending && w_pending) begin
+                    if (S_AXI_WVALID && S_AXI_WREADY) begin
+                        err_beats <= err_beats + 9'd1;
+                        if (S_AXI_WLAST || (err_beats == {1'b0, err_len})) err_wdone <= 1'b1;
+                    end
+                    if (err_wdone) begin
                         aw_pending <= 1'b0; w_pending <= 1'b0; S_AXI_BID <= id_reg; S_AXI_BRESP <= err_resp; S_AXI_BVALID <= 1'b1; state <= ST_WRITE_RESP;
                     end
                 end
