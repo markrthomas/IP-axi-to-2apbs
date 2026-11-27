@@ -24,7 +24,7 @@ if [ -f "$RES" ]; then
   PDK_DIR="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("PDK_ROOT","")+"/"+c.get("PDK","sky130A"))' "$RES" 2>/dev/null || true)"
 fi
 [ -d "$PDK_DIR/libs.ref/sky130_fd_sc_hd/verilog" ] || \
-  PDK_DIR="$(find -L "$PDK_ROOT" -maxdepth 4 -type d -name sky130A -path '*sky130*' 2>/dev/null | head -1)"
+  PDK_DIR="$(find -L "$PDK_ROOT" -maxdepth 6 -type d -name sky130A -path '*sky130*' 2>/dev/null | head -1)"
 V="$PDK_DIR/libs.ref/sky130_fd_sc_hd/verilog"
 [ -f "$V/primitives.v" ] && [ -f "$V/sky130_fd_sc_hd.v" ] || {
   echo "[GLS] FAIL — sky130_fd_sc_hd Verilog models not found (looked in '$V')"; exit 1; }
