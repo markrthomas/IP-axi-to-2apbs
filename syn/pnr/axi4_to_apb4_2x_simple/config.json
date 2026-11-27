@@ -1,0 +1,12 @@
+{
+  "//": "LibreLane (OpenLane successor) config for axi4_to_apb4_2x_simple on sky130A / sky130_fd_sc_hd. Run: syn/pnr/run_pnr.sh axi4_to_apb4_2x_simple (CI: .github/workflows/silicon.yml).",
+  "PDK": "sky130A",
+  "STD_CELL_LIBRARY": "sky130_fd_sc_hd",
+  "DESIGN_NAME": "axi4_to_apb4_2x_simple",
+  "VERILOG_FILES": ["dir::../../../src/axi4_to_apb4_2x_simple.v"],
+  "CLOCK_PORT": "ACLK",
+  "CLOCK_PERIOD": 5.0,
+  "PNR_SDC_FILE": "dir::../../constraints/axi_apb.sdc",
+  "SIGNOFF_SDC_FILE": "dir::../../constraints/axi_apb.sdc",
+  "FP_CORE_UTIL": 40
+}
