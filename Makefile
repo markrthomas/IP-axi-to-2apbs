@@ -582,6 +582,13 @@ gls:
 # T6 PPA proxy baseline (OSS, technology-independent): generic cell/flop count + logic
 # depth. Real node PPA (ns/mW/um^2) is needs-pdk (syn/ppa/PPA_PLAN.md).
 .PHONY: ppa
+# sky130 silicon run (needs Docker + LibreLane + network; CI: .github/workflows/silicon.yml)
+.PHONY: pnr gls-sky130
+pnr:
+	@for t in $(or $(TOP),axi4_to_apb4_2x_simple axi4_to_apb4_2x_burst); do bash $(CURDIR)/syn/pnr/run_pnr.sh $$t || exit 1; done
+gls-sky130:
+	@for t in $(or $(TOP),axi4_to_apb4_2x_simple axi4_to_apb4_2x_burst); do bash $(CURDIR)/syn/pnr/gls_sky130.sh $$t || exit 1; done
+
 ppa:
 	@command -v yosys >/dev/null 2>&1 || { echo "[PPA] yosys not on PATH — skipping"; exit 0; }
 	@bash $(CURDIR)/syn/ppa/ppa.sh
