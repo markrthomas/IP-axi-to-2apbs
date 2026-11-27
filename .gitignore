@@ -60,3 +60,5 @@ sim_compl_simple
 sim_compl_burst
 # release bundles (make release)
 dist/
+# IP-XACT schema mirror (make pkg-xsd)
+.cache/

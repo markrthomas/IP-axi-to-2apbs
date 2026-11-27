@@ -594,12 +594,26 @@ pkg:
 	@command -v xmllint >/dev/null 2>&1 || { echo "[PKG] xmllint not on PATH — skipping"; exit 0; }
 	@bash $(CURDIR)/pkg/check_ipxact.sh
 
-# T7 full XSD validation: mirror the IEEE 1685-2014 schema (needs network), then
-# run the pkg gate against it. CI runs this in the synth job.
-IPXACT_XSD_DIR ?= /tmp/ipxact-1685-2014
+# T7 full XSD validation: fetch the IEEE 1685-2014 schema (needs network; tries
+# Accellera, then eda.org, then a pinned GitHub copy, every file checked against
+# pkg/ip-xact/schema/ieee-1685-2014.sha256), then run the pkg gate against it. Strict by default: if the schema host is
+# unavailable this FAILS. With XSD_HOST_OPTIONAL=1 (PR CI only) an unavailable
+# host is reported as "XSD NOT RUN" (a GitHub warning, never a pass) and the
+# target exits 0; schema *validation errors* always fail. The Release workflow
+# runs it strict, so no release is published without full XSD validation.
+IPXACT_XSD_DIR ?= $(CURDIR)/.cache/ipxact-1685-2014
 .PHONY: pkg-xsd
 pkg-xsd:
-	python3 $(CURDIR)/scripts/fetch_ipxact_xsd.py $(IPXACT_XSD_DIR)
+	@python3 $(CURDIR)/scripts/fetch_ipxact_xsd.py $(IPXACT_XSD_DIR); rc=$$?; \
+	if [ $$rc -eq 3 ] && [ "$(XSD_HOST_OPTIONAL)" = "1" ]; then \
+		echo "::warning title=IP-XACT XSD NOT RUN::schema host unavailable; IP-XACT was NOT schema-validated in this run (not a pass). Releases still require it."; \
+		echo "[PKG] XSD schema validation: NOT RUN (schema host unavailable) — this is 'not run', not a pass."; \
+		exit 0; \
+	elif [ $$rc -eq 1 ]; then \
+		echo "[PKG] XSD schema validation: FAIL — schema integrity check (pinned SHA-256 mismatch)"; exit 1; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "[PKG] XSD schema validation: FAIL — could not obtain the 1685-2014 schema (rc=$$rc)"; exit 1; \
+	fi; \
 	IPXACT_XSD=$(IPXACT_XSD_DIR)/index.xsd bash $(CURDIR)/pkg/check_ipxact.sh
 
 # T7 release bundle (pkg/RELEASE.md): dist/axi4-to-2apbs-<VERSION>.tar.gz + MANIFEST.json.
