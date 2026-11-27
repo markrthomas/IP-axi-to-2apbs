@@ -59,7 +59,7 @@ the CI run.
 | **T4** DFT | ◐ PASS (scan-ready) | `make dft` | generated: `syn/dft/reports/<top>.scan.rpt`; committed: `syn/dft/DFT_PLAN.md` |
 | **T5** verif sign-off | ◑ strong | `make check` (UVM-on-Verilator) | 100% line cov; formal safety+liveness; `doc/coverage_notes.md` |
 | **T6** GLS + PPA | ◐ PASS | `make gls`, `make ppa` | generated: `syn/gls/reports/<top>.gls.rpt`, `syn/ppa/reports/<top>.ppa.rpt`; committed: `syn/gls/T6_PLAN.md` |
-| **T7** integration/pkg | ◐ PASS (gated) | `make pkg` | committed: `pkg/ip-xact/*.xml`, `pkg/INTEGRATION.md`, `pkg/check_ipxact.sh` |
+| **T7** integration/pkg | ✅ PASS — released **v1.0.0** | `make pkg pkg-xsd`; push a `vX.Y.Z` tag → Release workflow | committed: `pkg/ip-xact/*.xml` (XSD-valid), `pkg/INTEGRATION.md`, `pkg/RELEASE.md`; release asset `axi4-to-2apbs-1.0.0.tar.gz` + `MANIFEST.json` |
 
 Pinned design facts (do not re-derive): single clock domain (`ACLK` + async `ARESETn`),
 **no CDC**; two IP tops `axi4_to_apb4_2x_simple` and `axi4_to_apb4_2x_burst` (the regblock
@@ -118,12 +118,14 @@ Ordered; the first item is the only one with no external dependency.
 5. **T5 licensed sign-off `[needs-license]`.** Promote the UVM env to a licensed simulator
    run, keep the UVM-on-Verilator gate, and sign off the coverage model + exclusions
    (`doc/coverage_notes.md`).
-6. **T7 release.** *Release tooling done (2026-11-26):* `pkg/INTEGRATION.md` is written
-   against contract 1.0; the IP-XACT is **XSD-valid** (`make pkg-xsd`, in CI); `make release`
-   builds a reproducible bundle with `MANIFEST.json` (procedure in `pkg/RELEASE.md`, notes
-   in `pkg/RELEASE_NOTES.md`). No RAL: the bridge has no CSRs, and the regblock is an
-   example slave (contract §T0.3). **Remaining (owner):** tag `v1.0.0` and publish the
-   GitHub release with the bundle. This is the template release the other blocks copy.
+6. ✓ **T7 release — DONE 2026-11-27: [v1.0.0](https://github.com/markrthomas/IP-axi-to-2apbs/releases/tag/v1.0.0).**
+   `pkg/INTEGRATION.md` is written against contract 1.0. The IP-XACT is **XSD-valid**
+   (`make pkg-xsd`: pinned IEEE 1685-2014 schema, with Accellera → eda.org → GitHub
+   fallback). No RAL: the bridge has no CSRs, and the regblock is an example slave (contract
+   §T0.3). Releases are **built and published by CI**: push a `vX.Y.Z` tag on a green `main`
+   commit, and `.github/workflows/release.yml` re-runs every gate, builds the reproducible
+   bundle with `MANIFEST.json`, verifies it and publishes (procedure: `pkg/RELEASE.md`).
+   This is the template release the other blocks copy.
 7. **Sign `syn/SIGNOFF.md`** — fill artifact path + pass date + reviewer per gate.
 
 ### Track B — roll the kit onto the rest of the program
