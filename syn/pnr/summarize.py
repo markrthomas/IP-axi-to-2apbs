@@ -103,8 +103,12 @@ def main() -> int:
         fails.append("LVS result not reported")
     elif g("design__lvs_error__count") > 0:
         fails.append(f"LVS errors = {g('design__lvs_error__count')}")
-    if (g("antenna__violating__nets") or 0) > 0:
-        warns.append(f"antenna violating nets = {g('antenna__violating__nets')}")
+    for k, label in [("antenna__violating__nets", "antenna violating nets"),
+                     ("design__max_slew_violation__count", "max-slew violations"),
+                     ("design__max_cap_violation__count", "max-cap violations"),
+                     ("design__max_fanout_violation__count", "max-fanout violations")]:
+        if (g(k) or 0) > 0:
+            warns.append(f"{label} = {g(k)} (electrical rule; fix before a real tapeout)")
 
     say("")
     say("## Verdict")
