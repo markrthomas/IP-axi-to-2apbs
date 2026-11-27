@@ -22,9 +22,16 @@ PDK_ROOT="${PDK_ROOT:-$HOME/.ciel}"
 [ -f "$CFG" ] || { echo "[PNR] FAIL: no config $CFG"; exit 2; }
 
 cd "$ROOT"
-echo "[PNR] $TOP: LibreLane $(python3 -m librelane --version 2>/dev/null | tail -1), PDK root $PDK_ROOT"
+echo "[PNR] $TOP: librelane $(python3 -m pip show librelane 2>/dev/null | sed -n 's/^Version: //p'), PDK root $PDK_ROOT"
+CMD=(python3 -m librelane --dockerized --pdk-root "$PDK_ROOT" --run-tag "$TAG" --overwrite "$CFG")
 rc=0
-python3 -m librelane --dockerized --pdk-root "$PDK_ROOT" --run-tag "$TAG" --overwrite "$CFG" || rc=$?
+if [ -t 0 ]; then
+  "${CMD[@]}" || rc=$?
+else
+  # --dockerized starts the container with a TTY; CI has no terminal, so give it a
+  # pseudo-terminal with script(1). Its exit status is the command's (-e).
+  script -qefc "$(printf '%q ' "${CMD[@]}")" /dev/null </dev/null || rc=$?
+fi
 RUN="$ROOT/syn/pnr/$TOP/runs/$TAG"
 echo "[PNR] $TOP: LibreLane exit code $rc (run dir $RUN)"
 python3 "$ROOT/syn/pnr/summarize.py" "$TOP" "$RUN" "$rc"
