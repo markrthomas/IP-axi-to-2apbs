@@ -1,9 +1,8 @@
 # axi_apb.sdc — timing constraints for IP-axi-to-2apbs (AXI4 → 2× APB4 bridge)
 #
 # T0/T2 collateral for the tapeout-readiness program. Authored here; run on a real
-# STA tool (OpenSTA pathfinder or PrimeTime sign-off) against a target liberty —
-# neither is available in this workspace, so this file is sign-off-ready collateral.
-# See syn/SIGNOFF.md and ../DESIGN_READINESS.md.
+# STA tool: OpenSTA (run by the sky130 LibreLane flow in CI, syn/pnr/) or PrimeTime
+# sign-off against the target library. See syn/SIGNOFF.md.
 #
 # KEY FACT established by the pathfinder: this IP is SINGLE CLOCK DOMAIN. The only
 # clock/reset ports are ACLK and ARESETn (async, active-low). Both APB ports run on
@@ -27,7 +26,13 @@ set_false_path -from [get_ports ARESETn]
 #--- I/O budgets (default: 40% of period in, 40% out) ------------------------
 set IN_DEL  [expr {0.40 * $CLK_PERIOD}]
 set OUT_DEL [expr {0.40 * $CLK_PERIOD}]
-set all_in  [remove_from_collection [all_inputs]  [get_ports {ACLK ARESETn}]]
+# PrimeTime has remove_from_collection; OpenSTA (LibreLane/OpenROAD) has
+# delete_from_list. Use whichever this tool provides.
+if {[llength [info commands remove_from_collection]]} {
+  set all_in [remove_from_collection [all_inputs] [get_ports {ACLK ARESETn}]]
+} else {
+  set all_in [delete_from_list [all_inputs] [get_ports {ACLK ARESETn}]]
+}
 set_input_delay  -clock ACLK $IN_DEL  $all_in
 set_output_delay -clock ACLK $OUT_DEL [all_outputs]
 

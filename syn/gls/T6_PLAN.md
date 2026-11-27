@@ -19,7 +19,22 @@ from the RTL header, so it self-maintains) to keep the override legal. Netlists 
 binaries land in `syn/gls/build/` (gitignored); only the `.rpt` summaries are the tracked
 artifact, and CI uploads the full `reports/` tree.
 
-## What is deferred — `needs-pdk`
+## What runs on an open PDK (sky130, CI) — real artifacts
+
+| Step | Command | Artifact | Proves |
+|------|---------|----------|--------|
+| **RTL-to-GDS** | `make pnr` (`syn/pnr/run_pnr.sh`, LibreLane Classic, sky130A / sky130_fd_sc_hd; CI `silicon` workflow) | GDS, routed netlist, SPEF/SDF (CI artifact `sky130-<top>`); `syn/pnr/reports/<top>.pnr.rpt` | Liberty-mapped synthesis, P&R, DRC (router/Magic/KLayout), LVS, antenna; post-P&R area + power; post-route STA at 9 corners against `syn/constraints/axi_apb.sdc` (setup/hold WNS/TNS, Fmax). |
+| **Post-route GLS** | `make gls-sky130` (`syn/pnr/gls_sky130.sh` → `syn/gls/gls.sh` external-netlist mode) | `syn/pnr/reports/<top>.gls.rpt` | The **routed** sky130 netlist simulates correctly with the sky130_fd_sc_hd cell models (functional, unit delay): directed TB + AXI/APB compliance bench. |
+
+Result on 2026-11-27 (`d884d57`): both tops DRC/LVS clean, hold met everywhere, setup NOT
+met at the 5.0 ns placeholder (tt Fmax ≈ 189 MHz simple / 181 MHz burst), post-route GLS
+PASS. Numbers are in `syn/SIGNOFF.md` (T2, T6).
+
+## What is deferred — `needs-pdk` (target library) / `needs-license`
+
+On sky130, steps 1, 3 and 4 below are now done with open tools; what remains is running
+them on the **target** library and closing the items the OSS flow does not cover
+(SDF-timing GLS, activity-based power, LEC).
 
 Real T6 sign-off needs a standard-cell library + a place-and-route flow. These are
 authored here as the recipe and run where a PDK exists (open: sky130 + OpenROAD/OpenSTA;

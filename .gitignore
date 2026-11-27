@@ -62,3 +62,5 @@ sim_compl_burst
 dist/
 # IP-XACT schema mirror (make pkg-xsd)
 .cache/
+# LibreLane run directories (syn/pnr/run_pnr.sh)
+syn/pnr/*/runs/

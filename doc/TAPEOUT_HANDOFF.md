@@ -54,11 +54,11 @@ the CI run.
 |------|--------|-----------|--------------------|
 | **T0** spec freeze | ✅ PASS, tag `contract-v1.0` | `make test-compliance` | committed: `doc/design_contract.md` §T0 (contract `1.0`, frozen at `de98fe8`) |
 | **T1** synth | ◐ pathfind PASS | `make syn` | generated: `syn/reports/*.stat.txt` (latch-free) |
-| **T2** STA | ◐ collateral | — (needs-pdk) | committed: `syn/constraints/axi_apb.sdc`, `syn/sta/opensta.tcl` |
+| **T2** STA | ◐ sky130: hold met, setup NOT MET @ 200 MHz | `make pnr` (CI `silicon`) | generated: `syn/pnr/reports/<top>.pnr.rpt` (Fmax per corner); committed: SDC, `syn/sta/opensta.tcl` |
 | **T3** low-power | ◐ authored + OSS-lint | `make lp` | committed: `syn/lp/axi_apb.upf`, `syn/lp/LP_PLAN.md`; lint PASS in CI log |
 | **T4** DFT | ◐ PASS (scan-ready) | `make dft` | generated: `syn/dft/reports/<top>.scan.rpt`; committed: `syn/dft/DFT_PLAN.md` |
 | **T5** verif sign-off | ◑ strong | `make check` (UVM-on-Verilator) | 100% line cov; formal safety+liveness; `doc/coverage_notes.md` |
-| **T6** GLS + PPA | ◐ PASS | `make gls`, `make ppa` | generated: `syn/gls/reports/<top>.gls.rpt`, `syn/ppa/reports/<top>.ppa.rpt`; committed: `syn/gls/T6_PLAN.md` |
+| **T6** GLS + PPA | ◐ PASS on sky130 | `make gls ppa`; `make pnr gls-sky130` (CI `silicon`) | generated: `syn/gls/reports/*`, `syn/ppa/reports/*`, `syn/pnr/reports/<top>.{pnr,gls}.rpt` + GDS (CI artifact); committed: `syn/gls/T6_PLAN.md`, `syn/pnr/` |
 | **T7** integration/pkg | ◐ PASS (gated) | `make pkg` | committed: `pkg/ip-xact/*.xml`, `pkg/INTEGRATION.md`, `pkg/check_ipxact.sh` |
 
 Pinned design facts (do not re-derive): single clock domain (`ACLK` + async `ARESETn`),
@@ -106,11 +106,15 @@ Ordered; the first item is the only one with no external dependency.
    review's five findings O1–O5 were fixed (#33, #34) or made integration requirements,
    with compliance TBs (`make test-compliance`) that fail before and pass after. Any
    later contract change is a new contract version + tag.
-2. **T2/T6 silicon run `[needs-pdk]`.** Take the block through OpenLane/OpenROAD on an
-   open PDK (sky130/gf180 — viable for a block this small) for a real GDS, then port to
-   the target library: Liberty-mapped synth, SDF-annotated (timing) GLS, OpenSTA/PrimeTime
-   STA against `syn/constraints/axi_apb.sdc`, post-P&R area/power, and RTL↔netlist LEC.
-   Recipe in `syn/gls/T6_PLAN.md`.
+2. **T2/T6 silicon run.** ✓ *Open-PDK run done 2026-11-27:* sky130 RTL-to-GDS with
+   LibreLane (OpenLane's successor) in CI (`.github/workflows/silicon.yml`, `make pnr
+   gls-sky130`). Both tops are DRC/LVS clean, with post-P&R area/power and 9-corner STA
+   (hold met; **setup misses the 5.0 ns placeholder target**: Fmax tt ≈ 189 / 181 MHz for
+   simple / burst). The routed netlist passes functional GLS, including the compliance
+   bench. **Remaining:** the owner sets the real clock budget (and, if 200 MHz stays, a
+   timing-closure pass on the burst ss path). Then `[needs-pdk]`: port to the target
+   library, SDF-annotated (timing) GLS, PrimeTime sign-off, VCD-based power, and
+   RTL↔netlist LEC. Recipe in `syn/gls/T6_PLAN.md`.
 3. **T3 power-aware run `[needs-license]`.** Run the authored UPF (`syn/lp/axi_apb.upf`,
    PD_AON + switchable PD_APB) on a power-aware sim (VCS `-upf`) and close RTL↔UPF LEC.
 4. **T4 ATPG `[needs-license]`.** Scan insertion + ATPG (DFT Compiler/TestMAX) on the
