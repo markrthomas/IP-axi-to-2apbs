@@ -59,7 +59,7 @@ the CI run.
 | **T4** DFT | ◐ PASS (scan-ready) | `make dft` | generated: `syn/dft/reports/<top>.scan.rpt`; committed: `syn/dft/DFT_PLAN.md` |
 | **T5** verif sign-off | ◑ strong | `make check` (UVM-on-Verilator) | 100% line cov; formal safety+liveness; `doc/coverage_notes.md` |
 | **T6** GLS + PPA | ◐ PASS | `make gls`, `make ppa` | generated: `syn/gls/reports/<top>.gls.rpt`, `syn/ppa/reports/<top>.ppa.rpt`; committed: `syn/gls/T6_PLAN.md` |
-| **T7** integration/pkg | ◐ PASS (gated) | `make pkg` | committed: `pkg/ip-xact/*.xml`, `pkg/INTEGRATION.md`, `pkg/check_ipxact.sh` |
+| **T7** integration/pkg | ✅ PASS — released **v1.0.0** | `make pkg pkg-xsd`; push a `vX.Y.Z` tag → Release workflow | committed: `pkg/ip-xact/*.xml` (XSD-valid), `pkg/INTEGRATION.md`, `pkg/RELEASE.md`; release asset `axi4-to-2apbs-1.0.0.tar.gz` + `MANIFEST.json` |
 
 Pinned design facts (do not re-derive): single clock domain (`ACLK` + async `ARESETn`),
 **no CDC**; two IP tops `axi4_to_apb4_2x_simple` and `axi4_to_apb4_2x_burst` (the regblock
